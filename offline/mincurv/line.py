@@ -1,9 +1,14 @@
-"""build a validated racing line from the minimum-curvature QP's solved lateral offsets.
+"""build a validated racing line from a solved lateral-offset array alpha(s).
 
-mirrors offline/geometry/pipeline.py's build_track() structure once past the QP solve: raw
+mirrors offline/geometry/pipeline.py's build_track() structure once past the offset solve: raw
 offset points get refit with a closed spline and resampled by arc length exactly like a fresh
 centerline, since offsetting a uniformly-arc-length-spaced curve does not itself produce a
 uniformly-spaced result.
+
+build_line_from_offsets is the shared post-solve pipeline -- any solver that produces a full-
+resolution alpha(s) array (minimum-curvature, shortest-path, or a grip-weighted blend of the
+two) turns it into a validated OptimizedLine through here, so the spline-refit/resample/bounds-
+check logic lives in exactly one place.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from offline.validation.checks import assert_loop_closes, assert_within_track_bo
 class OptimizedLine:
     circuit_name: str
     source_path: Path
+    method: str
     spacing_m: float
     margin_m: float
     s_m: np.ndarray
@@ -49,7 +55,7 @@ class OptimizedLine:
             "meta": {
                 "circuit_name": self.circuit_name,
                 "source": str(self.source_path),
-                "method": "minimum-curvature QP over Frenet-frame lateral offsets",
+                "method": self.method,
                 "margin_m": self.margin_m,
                 "resample_spacing_m": self.spacing_m,
                 "n_points": self.n_points,
@@ -66,20 +72,20 @@ class OptimizedLine:
         }
 
 
-def build_mincurv_line(
+def build_line_from_offsets(
     track: TrackGeometry,
+    alpha: np.ndarray,
+    method: str,
     margin_m: float = 1.0,
     spacing_m: float = 1.0,
     loop_closure_tol_m: float = 1e-3,
-    qp_spacing_m: float = 5.0,
 ) -> OptimizedLine:
-    """solve the minimum-curvature QP on track and return a validated racing line, or raise.
+    """turn a full-resolution solved lateral-offset array alpha(s) into a validated racing line.
 
+    shared by every offset solver (minimum-curvature, shortest-path, grip-weighted blend) --
     hard gates (assert_loop_closes, assert_within_track_bounds) run before the result is
-    returned -- a failing solve must never produce output that looks successful.
+    returned, a failing solve must never produce output that looks successful.
     """
-    alpha = solve_lateral_offsets(track, margin_m, qp_spacing_m)
-
     normal_x = -np.sin(track.heading_rad)
     normal_y = np.cos(track.heading_rad)
     raw_x = track.x_m + alpha * normal_x
@@ -120,6 +126,7 @@ def build_mincurv_line(
     return OptimizedLine(
         circuit_name=track.circuit_name,
         source_path=track.source_path,
+        method=method,
         spacing_m=spacing_m,
         margin_m=margin_m,
         s_m=s_m,
@@ -128,4 +135,23 @@ def build_mincurv_line(
         heading_rad=heading_rad,
         kappa_1pm=kappa,
         lateral_offset_m=lateral_offset_m,
+    )
+
+
+def build_mincurv_line(
+    track: TrackGeometry,
+    margin_m: float = 1.0,
+    spacing_m: float = 1.0,
+    loop_closure_tol_m: float = 1e-3,
+    qp_spacing_m: float = 5.0,
+) -> OptimizedLine:
+    """solve the minimum-curvature QP on track and return a validated racing line, or raise."""
+    alpha = solve_lateral_offsets(track, margin_m, qp_spacing_m)
+    return build_line_from_offsets(
+        track,
+        alpha,
+        method="minimum-curvature QP over Frenet-frame lateral offsets",
+        margin_m=margin_m,
+        spacing_m=spacing_m,
+        loop_closure_tol_m=loop_closure_tol_m,
     )
