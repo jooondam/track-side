@@ -7,6 +7,7 @@ only trusted once every function here passes on its output.
 from __future__ import annotations
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 
 def assert_loop_closes(points: np.ndarray, tol: float = 1e-3) -> None:
@@ -85,6 +86,47 @@ def assert_energy_balance(
             f"(power used {power_used_w[worst] / 1000:.1f} kW > "
             f"limit {power_w / 1000:.1f} kW)"
         )
+
+
+def assert_within_track_bounds(
+    lateral_offset_m: np.ndarray,
+    w_tr_left_m: np.ndarray,
+    w_tr_right_m: np.ndarray,
+    margin_m: float = 0.0,
+) -> None:
+    """raise if a signed lateral offset from the centerline ever leaves the track.
+
+    positive lateral_offset_m is toward the left boundary (matching unit_normals_left's
+    convention), so the valid range at each point is [-(w_tr_right_m - margin_m),
+    w_tr_left_m - margin_m]. margin_m defaults to 0 here since callers that already solved
+    the QP with a margin (offline/mincurv) are re-checking the box constraint after a spline
+    refit, not re-applying the margin a second time.
+    """
+    lower = -(w_tr_right_m - margin_m)
+    upper = w_tr_left_m - margin_m
+    violations = np.nonzero((lateral_offset_m < lower) | (lateral_offset_m > upper))[0]
+    if violations.size > 0:
+        worst = violations[np.argmax(np.abs(lateral_offset_m[violations]))]
+        raise AssertionError(
+            f"line leaves the track at {violations.size} sample point(s); worst at index "
+            f"{worst} (offset={lateral_offset_m[worst]:.2f} m, "
+            f"bounds=[{lower[worst]:.2f}, {upper[worst]:.2f}] m)"
+        )
+
+
+def lateral_deviation(line_a_xy: np.ndarray, line_b_xy: np.ndarray) -> dict[str, float]:
+    """nearest-point distance stats between two (N, 2) polylines.
+
+    uses a KD-tree nearest-neighbour lookup rather than index-aligned or arc-length-aligned
+    comparison, since two independently-parametrized racing lines (ours vs TUM's) don't share
+    a common arc-length origin or point count.
+    """
+    tree = cKDTree(line_b_xy)
+    distances, _ = tree.query(line_a_xy)
+    return {
+        "max_m": float(np.max(distances)),
+        "mean_m": float(np.mean(distances)),
+    }
 
 
 def curvature_deviation(kappa: np.ndarray, kappa_reference: np.ndarray) -> dict[str, float]:
