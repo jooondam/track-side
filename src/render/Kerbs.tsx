@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { TrackLines } from "../assets";
+import { MATERIAL } from "../ui/theme";
 
 const KAPPA_THRESHOLD = 8e-3; // 1/m -> corners tighter than R=125 m get kerbs
 const MIN_SPAN_M = 20;
@@ -99,11 +100,11 @@ export function Kerbs({ trackLines }: { trackLines: TrackLines }) {
     <>
       <instancedMesh ref={redRef} args={[undefined, undefined, maxCount]}>
         <boxGeometry args={[SEGMENT_PITCH_M * 0.95, KERB_HEIGHT, KERB_WIDTH]} />
-        <meshStandardMaterial color="#a8202a" roughness={0.7} />
+        <meshStandardMaterial color={MATERIAL.kerbRed} roughness={0.7} />
       </instancedMesh>
       <instancedMesh ref={whiteRef} args={[undefined, undefined, maxCount]}>
         <boxGeometry args={[SEGMENT_PITCH_M * 0.95, KERB_HEIGHT, KERB_WIDTH]} />
-        <meshStandardMaterial color="#c8c8ce" roughness={0.7} />
+        <meshStandardMaterial color={MATERIAL.kerbWhite} roughness={0.7} />
       </instancedMesh>
     </>
   );

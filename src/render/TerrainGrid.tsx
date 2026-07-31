@@ -9,33 +9,38 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Terrain } from "../assets";
+import { hexToRgb, useThemeTokens } from "../ui/theme";
 
-const BASE_OPACITY = 0.6;
+const BASE_OPACITY = 0.42; // context, not texture: the dots must never outweigh the circuit
 const DROP_BELOW_ROAD = 1.0; // sit under the ribbon so it never z-fights
 const DOT_SIZE = 9; // world-ish units with sizeAttenuation
 
-// natural elevation ramp: deep green -> green -> earth brown -> dry tan
-const RAMP: [number, [number, number, number]][] = [
-  [0.0, [0.08, 0.2, 0.12]],
-  [0.45, [0.2, 0.38, 0.18]],
-  [0.75, [0.42, 0.37, 0.24]],
-  [1.0, [0.62, 0.55, 0.42]],
-];
-
-function rampColor(t: number, out: [number, number, number]): void {
-  const clamped = Math.min(Math.max(t, 0), 1);
-  let i = 0;
-  while (i < RAMP.length - 2 && clamped > RAMP[i + 1][0]) i++;
-  const [t0, c0] = RAMP[i];
-  const [t1, c1] = RAMP[i + 1];
-  const f = (clamped - t0) / Math.max(t1 - t0, 1e-9);
-  out[0] = c0[0] + f * (c1[0] - c0[0]);
-  out[1] = c0[1] + f * (c1[1] - c0[1]);
-  out[2] = c0[2] + f * (c1[2] - c0[2]);
-}
-
 export function TerrainGrid({ terrain, exaggeration }: { terrain: Terrain; exaggeration: number }) {
   const materialRef = useRef<THREE.PointsMaterial>(null);
+  const tokens = useThemeTokens();
+
+  // low-to-high elevation ramp, from the theme so the terrain and the elevation chart under it
+  // describe the same thing in the same colours
+  const ramp = useMemo(() => {
+    const lo: [number, number, number] = [0, 0, 0];
+    const mid: [number, number, number] = [0, 0, 0];
+    const hi: [number, number, number] = [0, 0, 0];
+    hexToRgb(tokens.terrainLo, lo);
+    hexToRgb(tokens.terrainMid, mid);
+    hexToRgb(tokens.terrainHi, hi);
+    return [lo, mid, hi];
+  }, [tokens]);
+
+  const rampColor = useMemo(() => {
+    return (t: number, out: [number, number, number]) => {
+      const c = Math.min(Math.max(t, 0), 1);
+      const [lo, mid, hi] = ramp;
+      const [a, b, f] = c < 0.6 ? [lo, mid, c / 0.6] : [mid, hi, (c - 0.6) / 0.4];
+      out[0] = a[0] + f * (b[0] - a[0]);
+      out[1] = a[1] + f * (b[1] - a[1]);
+      out[2] = a[2] + f * (b[2] - a[2]);
+    };
+  }, [ramp]);
 
   const { geometry, meanHeight } = useMemo(() => {
     const n = terrain.nCells;
@@ -75,7 +80,7 @@ export function TerrainGrid({ terrain, exaggeration }: { terrain: Terrain; exagg
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     return { geometry: geo, meanHeight: hSum / terrain.heights.length };
-  }, [terrain]);
+  }, [terrain, rampColor]);
 
   useFrame(({ camera }) => {
     if (!materialRef.current) return;

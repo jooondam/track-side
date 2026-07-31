@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A GT3 racing line optimiser: minimum-curvature geometry and a velocity profile that re-solves live in the browser, on real circuits with real elevation."
+    />
     <title>track-side: GT3 racing line viewer</title>
+    <!-- the base colours are duplicated here on purpose: they paint the first frame before any
+         JavaScript runs, so there is no white flash before the token stylesheet is injected -->
     <style>
       html,
       body,
@@ -11,9 +17,18 @@
         margin: 0;
         height: 100%;
         overflow: hidden;
-        background: #dfe1e6;
-        color: #24262b;
-        font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+        background: #08090c;
+        color: #e8eaf0;
+        font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+          sans-serif;
+      }
+      @media (prefers-color-scheme: light) {
+        html,
+        body,
+        #root {
+          background: #eef0f3;
+          color: #14161a;
+        }
       }
     </style>
   </head>

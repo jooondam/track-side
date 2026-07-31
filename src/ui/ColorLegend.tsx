@@ -1,8 +1,11 @@
-// legend for what the line colours mean. Phase mode: labelled swatches. Speed mode: the
-// exact viridis ramp the 3D line uses, with live km/h ticks: the mapping is normalised to
-// the current solve's min/max, so the legend has to be too.
+// what the line colours mean. Phase mode: labelled swatches, because colour alone fails the 8%
+// of men with red-green colour vision deficiency and the label is the fallback channel. Speed
+// mode: the exact viridis ramp the 3D line uses, with live km/h ticks, since the mapping is
+// normalised to the current solve's min and max and the legend has to be too.
 
 import { useMemo } from "react";
+import { Panel } from "./primitives";
+import { useIsNarrow, useThemeTokens } from "./theme";
 import type { ColorMode } from "../render/RacingLine";
 import { viridis } from "../render/RacingLine";
 import type { VelocityProfileResult } from "../solver/velocity";
@@ -12,39 +15,26 @@ interface ColorLegendProps {
   result: VelocityProfileResult;
 }
 
-const boxStyle: React.CSSProperties = {
-  position: "absolute",
-  right: 12,
-  bottom: 12,
-  padding: "8px 12px",
-  background: "rgba(10, 10, 15, 0.85)",
-  border: "1px solid #22222e",
-  borderRadius: 6,
-  fontSize: 11,
-  userSelect: "none",
-  color: "#d8d8e0",
-};
-
 function Swatch({ color, label }: { color: string; label: string }) {
   return (
-    <span style={{ marginRight: 10 }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
       <span
         style={{
-          display: "inline-block",
-          width: 10,
-          height: 10,
+          width: 12,
+          height: 3,
           background: color,
-          borderRadius: 2,
-          marginRight: 5,
-          verticalAlign: "-1px",
+          borderRadius: 1,
         }}
       />
-      {label}
+      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
     </span>
   );
 }
 
 export function ColorLegend({ colorMode, result }: ColorLegendProps) {
+  const tokens = useThemeTokens();
+  const narrow = useIsNarrow();
+
   const { vMinKmh, vMaxKmh, gradient } = useMemo(() => {
     let vMin = Infinity;
     let vMax = -Infinity;
@@ -60,31 +50,51 @@ export function ColorLegend({ colorMode, result }: ColorLegendProps) {
         `rgb(${Math.round(rgb[0] * 255)},${Math.round(rgb[1] * 255)},${Math.round(rgb[2] * 255)}) ${i * 10}%`,
       );
     }
+    // a degenerate solve (every sample the same speed) must not render "NaN km/h"
+    const finite = Number.isFinite(vMin) && Number.isFinite(vMax);
     return {
-      vMinKmh: Math.round(vMin * 3.6),
-      vMaxKmh: Math.round(vMax * 3.6),
+      vMinKmh: finite ? Math.round(vMin * 3.6) : 0,
+      vMaxKmh: finite ? Math.round(vMax * 3.6) : 0,
       gradient: `linear-gradient(90deg, ${stops.join(", ")})`,
     };
   }, [result]);
 
-  if (colorMode === "phase") {
-    return (
-      <div style={boxStyle}>
-        <Swatch color="#2ba22b" label="accel" />
-        <Swatch color="#d62728" label="brake" />
-        <Swatch color="#8a8a94" label="coast" />
-      </div>
-    );
-  }
-
   return (
-    <div style={boxStyle}>
-      <div style={{ width: 180, height: 10, background: gradient, borderRadius: 2 }} />
-      <div style={{ display: "flex", justifyContent: "space-between", color: "#9a9aa8" }}>
-        <span>{vMinKmh}</span>
-        <span>{Math.round((vMinKmh + vMaxKmh) / 2)}</span>
-        <span>{vMaxKmh} km/h</span>
-      </div>
-    </div>
+    <Panel
+      style={{
+        position: "absolute",
+        // on a phone the top strip is already spoken for by the viewpoint pill
+        right: "var(--s3)",
+        ...(narrow ? { bottom: "var(--s3)" } : { top: "var(--s3)" }),
+        padding: "var(--s2) var(--s3)",
+        userSelect: "none",
+      }}
+    >
+      {colorMode === "phase" ? (
+        <div style={{ display: "flex", gap: "var(--s3)" }}>
+          <Swatch color={tokens.phaseAccel} label="accelerating" />
+          <Swatch color={tokens.phaseBrake} label="braking" />
+          <Swatch color={tokens.phaseCoast} label="holding" />
+        </div>
+      ) : (
+        <div>
+          <div style={{ width: 168, height: 8, background: gradient, borderRadius: 1 }} />
+          <div
+            className="tnum"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: 10,
+              color: "var(--text-dim)",
+              marginTop: 2,
+            }}
+          >
+            <span>{vMinKmh}</span>
+            <span>{Math.round((vMinKmh + vMaxKmh) / 2)}</span>
+            <span>{vMaxKmh} km/h</span>
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }

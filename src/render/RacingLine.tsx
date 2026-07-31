@@ -10,16 +10,11 @@ import type { Line2 } from "three-stdlib";
 import type { VelocityProfileResult } from "../solver/velocity";
 import { PHASE_ACCEL, PHASE_BRAKE } from "../solver/velocity";
 import type { LineData } from "../assets";
+import { hexToRgb, useThemeTokens } from "../ui/theme";
 
 export type ColorMode = "phase" | "speed";
 
 const LINE_LIFT_M = 0.4; // render-side lift above the ribbon; the data stays on the surface
-
-const PHASE_RGB: Record<number, [number, number, number]> = {
-  [PHASE_ACCEL]: [0.17, 0.63, 0.17], // accel green, matches plots.py
-  [PHASE_BRAKE]: [0.84, 0.15, 0.16], // brake red
-};
-const COAST_RGB: [number, number, number] = [0.55, 0.55, 0.58];
 
 // coarse viridis stops, matching matplotlib's colormap closely enough for the eye
 const VIRIDIS: [number, number, number][] = [
@@ -55,6 +50,19 @@ interface RacingLineProps {
 
 export function RacingLine({ line, result, colorMode, onHoverIndex }: RacingLineProps) {
   const lineRef = useRef<Line2>(null);
+  const tokens = useThemeTokens();
+
+  // phase colours come from the theme so they change with it, and so the legend and the 3D line
+  // can never disagree about what "braking" looks like
+  const phaseRgb = useMemo(() => {
+    const accel: [number, number, number] = [0, 0, 0];
+    const brake: [number, number, number] = [0, 0, 0];
+    const coast: [number, number, number] = [0, 0, 0];
+    hexToRgb(tokens.phaseAccel, accel);
+    hexToRgb(tokens.phaseBrake, brake);
+    hexToRgb(tokens.phaseCoast, coast);
+    return { [PHASE_ACCEL]: accel, [PHASE_BRAKE]: brake, coast };
+  }, [tokens]);
 
   const liftedPoints = useMemo(() => {
     const pts: [number, number, number][] = [];
@@ -95,7 +103,7 @@ export function RacingLine({ line, result, colorMode, onHoverIndex }: RacingLine
     for (let i = 0; i < line.nPoints; i++) {
       let rgb: [number, number, number];
       if (colorMode === "phase") {
-        rgb = PHASE_RGB[result.phase[i]] ?? COAST_RGB;
+        rgb = phaseRgb[result.phase[i]] ?? phaseRgb.coast;
       } else {
         viridis((result.vMps[i] - vMin) / Math.max(vMax - vMin, 1e-9), scratch);
         rgb = scratch;
@@ -105,14 +113,14 @@ export function RacingLine({ line, result, colorMode, onHoverIndex }: RacingLine
       colorBuffer[3 * i + 2] = rgb[2];
     }
     lineRef.current?.geometry.setColors(colorBuffer as unknown as number[]);
-  }, [result, colorMode, colorBuffer, line]);
+  }, [result, colorMode, colorBuffer, line, phaseRgb]);
 
   return (
     <Line
       ref={lineRef}
       points={liftedPoints}
       vertexColors={placeholderColors}
-      lineWidth={3}
+      lineWidth={4}
       onPointerMove={(e) => {
         if (!onHoverIndex) return;
         // nearest line index to the hit point: linear scan is ~7k ops, trivial per event

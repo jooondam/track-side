@@ -1,8 +1,13 @@
-// lap timeline: current time / lap time, draggable to scrub the car anywhere in the lap.
-// cursor position updates in a rAF loop from the shared progress ref (no React state at
-// 60 Hz); dragging writes a scrub request and pauses playback via the callback.
+// lap timeline: elapsed / total, draggable to put the car anywhere in the lap. The cursor moves
+// in a rAF loop from the shared progress ref, so there is no React state at 60 Hz; dragging
+// writes a scrub request and pauses playback through the callback.
+//
+// Height is 40px rather than the 26px it replaced: WCAG 2.2 target-size wants 24px minimum, and
+// a scrub bar is a drag target, which deserves the 44px recommendation more than a button does.
 
 import { useEffect, useRef } from "react";
+import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
+import { useThemeTokens } from "./theme";
 import type { LapProgress } from "../render/CarMarker";
 import type { LapTimeTable } from "../solver/lapTime";
 import { sAtTime } from "../solver/lapTime";
@@ -10,53 +15,71 @@ import { sAtTime } from "../solver/lapTime";
 interface TimelineProps {
   sM: Float64Array;
   table: LapTimeTable;
+  width: number;
+  height?: number;
   progressRef: React.MutableRefObject<LapProgress>;
   onScrubStart: () => void;
 }
 
-export function Timeline({ sM, table, progressRef, onScrubStart }: TimelineProps) {
+const PAD = { l: 46, r: 10, t: 18, b: 8 };
+
+function mmss(t: number): string {
+  return `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
+}
+
+export function Timeline({
+  sM,
+  table,
+  width,
+  height = 40,
+  progressRef,
+  onScrubStart,
+}: TimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragging = useRef(false);
+  const tokens = useThemeTokens();
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = prepareCanvas(canvas, width, height);
     if (!ctx) return;
-    const w = canvas.width;
-    const h = canvas.height;
+    const r = plotRect(width, height, PAD);
+    const barY = r.top + r.height / 2;
 
     let raf = 0;
     const draw = () => {
       const p = progressRef.current;
-      const frac = table.lapTimeS > 0 ? p.tS / table.lapTimeS : 0;
+      const frac = table.lapTimeS > 0 ? Math.min(Math.max(p.tS / table.lapTimeS, 0), 1) : 0;
 
-      ctx.clearRect(0, 0, w, h);
-      // bar
-      ctx.fillStyle = "#16161e";
-      ctx.fillRect(0, h / 2 - 3, w, 6);
-      ctx.fillStyle = "#0e3a42";
-      ctx.fillRect(0, h / 2 - 3, frac * w, 6);
-      // cursor
-      ctx.fillStyle = "#00e5ff";
-      ctx.fillRect(frac * w - 1.5, h / 2 - 8, 3, 16);
-      // time text
-      ctx.fillStyle = "#9a9aa8";
-      ctx.font = "10px monospace";
-      const mm = (t: number) =>
-        `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
-      ctx.fillText(`${mm(p.tS)} / ${mm(table.lapTimeS)}`, 4, 12);
+      ctx.clearRect(0, 0, width, height);
+
+      ctx.fillStyle = tokens.line;
+      ctx.fillRect(r.left, barY - 2, r.width, 4);
+      ctx.fillStyle = tokens.accentDim;
+      ctx.fillRect(r.left, barY - 2, frac * r.width, 4);
+
+      const x = r.left + frac * r.width;
+      ctx.fillStyle = tokens.accent;
+      ctx.fillRect(x - 1.5, barY - 8, 3, 16);
+
+      ctx.fillStyle = tokens.textDim;
+      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = "left";
+      ctx.fillText("lap position", r.left, 10);
+      ctx.font = '11px ui-monospace, "SF Mono", Menlo, monospace';
+      ctx.textAlign = "right";
+      ctx.fillStyle = tokens.textMuted;
+      ctx.fillText(`${mmss(p.tS)} / ${mmss(table.lapTimeS)}`, r.left + r.width, 10);
 
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
 
     const scrubAt = (clientX: number) => {
-      const rect = canvas.getBoundingClientRect();
-      const frac = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 0.9999);
-      const s = sAtTime(table, sM, frac * table.lapTimeS);
+      const frac = Math.min(fracAtClientX(canvas, clientX, r), 0.9999);
       const p = progressRef.current;
-      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s };
+      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: sAtTime(table, sM, frac * table.lapTimeS) };
       p.tS = frac * table.lapTimeS;
     };
     const down = (e: PointerEvent) => {
@@ -68,8 +91,9 @@ export function Timeline({ sM, table, progressRef, onScrubStart }: TimelineProps
     const move = (e: PointerEvent) => {
       if (dragging.current) scrubAt(e.clientX);
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
       dragging.current = false;
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     };
     canvas.addEventListener("pointerdown", down);
     canvas.addEventListener("pointermove", move);
@@ -80,14 +104,14 @@ export function Timeline({ sM, table, progressRef, onScrubStart }: TimelineProps
       canvas.removeEventListener("pointermove", move);
       canvas.removeEventListener("pointerup", up);
     };
-  }, [sM, table, progressRef, onScrubStart]);
+  }, [sM, table, width, height, tokens, progressRef, onScrubStart]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={640}
-      height={26}
-      style={{ display: "block", cursor: "ew-resize" }}
+      role="img"
+      aria-label={`Lap position scrubber, lap length ${mmss(table.lapTimeS)}.`}
+      style={{ display: "block", cursor: "ew-resize", touchAction: "none" }}
     />
   );
 }
