@@ -90,11 +90,13 @@ export function CarMarker({
     groupRef.current.position.set(x, y * exaggeration + 0.4, z);
 
     // yaw from the ground-plane tangent (pitch skipped: at 3x exaggeration a pitched car
-    // reads as broken rather than informative)
+    // reads as broken rather than informative). The -PI/2 puts the model's nose (local -z)
+    // on the travel direction; +PI/2 had the car driving tail-first, invisible with the old
+    // near-symmetric box model but obvious with a real nose and wing.
     const ahead = (hi + 4) % (line.nPoints - 1);
     const dx = line.positionYup[3 * ahead] - x;
     const dz = line.positionYup[3 * ahead + 2] - z;
-    groupRef.current.rotation.y = Math.atan2(-dz, dx) + Math.PI / 2;
+    groupRef.current.rotation.y = Math.atan2(-dz, dx) - Math.PI / 2;
 
     if (!ghost && progressRef) {
       const vNow = result.vMps[lo] + f * (result.vMps[hi] - result.vMps[lo]);
