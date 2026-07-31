@@ -12,6 +12,7 @@ import pytest
 from offline.validation.checks import (
     assert_closed_loop_velocity,
     assert_energy_balance,
+    assert_friction_circle_respected,
     assert_loop_closes,
     assert_no_normal_crossings,
     assert_within_track_bounds,
@@ -125,6 +126,21 @@ def test_within_bounds_margin_shrinks_the_valid_range() -> None:
     assert_within_track_bounds(offset, w_left, w_right, margin_m=0.0)
     with pytest.raises(AssertionError, match="leaves the track"):
         assert_within_track_bounds(offset, w_left, w_right, margin_m=1.0)
+
+
+def test_friction_circle_within_limit_passes() -> None:
+    ay_max = np.array([15.0, 15.0])
+    ax_tire = np.array([9.0, -9.0])
+    ay = np.array([12.0, 12.0])  # hypot(9, 12) = 15, exactly on the circle
+    assert_friction_circle_respected(ax_tire, ay, ay_max)
+
+
+def test_friction_circle_exceeded_raises() -> None:
+    ay_max = np.array([15.0])
+    ax_tire = np.array([20.0])
+    ay = np.array([20.0])  # hypot(20, 20) ~= 28.3, way past the 15 limit
+    with pytest.raises(AssertionError, match="friction circle violated"):
+        assert_friction_circle_respected(ax_tire, ay, ay_max)
 
 
 def test_lateral_deviation_identical_lines_is_zero() -> None:

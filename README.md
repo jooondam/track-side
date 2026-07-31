@@ -1,12 +1,13 @@
-# track-limit
+# track-side
 
 Ideal racing line optimizer for GT3 cars: minimum-curvature and minimum-time
 trajectory planning on real circuit geometry, with an interactive 3D track
 viewer as the delivery layer.
 
-Status: M1 (clean geometry) in progress. Validation harness (`offline/validation/`)
-is written and passing against synthetic geometry; the ingestion and geometry
-pipeline that must satisfy it comes next.
+Status: M1–M3 done: clean track geometry, a velocity profile solver, and a minimum-curvature
+path solver, all validated against TUM's vendored Monza raceline. M4's offline min-time NLP
+reference (`offline/reference/mintime.py`, swept over a μ grid by `offline/build_mintime.py`)
+is built; the runtime grip-weighted blend that drives the interactive slider is next.
 
 ## Data rights and attribution
 

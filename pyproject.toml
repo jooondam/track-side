@@ -1,5 +1,5 @@
 [project]
-name = "track-limit"
+name = "track-side"
 version = "0.1.0"
 description = "Ideal racing line optimizer: min-curvature and min-time trajectory planning on real circuit geometry."
 requires-python = ">=3.10"

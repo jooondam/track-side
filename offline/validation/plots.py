@@ -1,8 +1,9 @@
-"""M1/M2 deliverable plots: curvature/boundary sanity views and the velocity profile."""
+"""M1-M4 deliverable plots: geometry/velocity sanity views, line comparisons, mu-grid results."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +13,11 @@ from offline.geometry.pipeline import TrackGeometry
 from offline.geometry.raceline import RacelineGeometry
 from offline.mincurv.line import OptimizedLine
 from offline.velocity.solver import VelocityProfile
+
+if TYPE_CHECKING:
+    # casadi (offline/reference/mintime.py's dependency) is an optional extra, so this module
+    # must stay importable without it: MinTimeSolution is a type-only import.
+    from offline.reference.mintime import MinTimeSolution
 
 PHASE_COLORS = {"accel": "#2ca02c", "brake": "#d62728", "coast": "#dddddd"}
 
@@ -123,6 +129,35 @@ def plot_lateral_offset(mincurv_line: OptimizedLine, output_path: Path) -> None:
     ax.set_xlabel("s [m]")
     ax.set_ylabel("lateral offset [m] (+ = left)")
     ax.set_title(f"{mincurv_line.circuit_name} minimum-curvature lateral offset")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300)
+    plt.close(fig)
+
+
+def plot_lap_time_vs_mu(mu_values: np.ndarray, lap_times_s: np.ndarray, output_path: Path) -> None:
+    """save lap time vs grip coefficient, the M4 mu-grid deliverable plot."""
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(mu_values, lap_times_s, marker="o", linewidth=0.8, color="black")
+    ax.set_xlabel("mu")
+    ax.set_ylabel("lap time [s]")
+    ax.set_title("minimum-time lap time vs grip")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300)
+    plt.close(fig)
+
+
+def plot_mintime_line(track: TrackGeometry, solution: "MinTimeSolution", output_path: Path) -> None:
+    """save centerline + the min-time NLP's solved line, overlaid, for one representative mu.
+
+    unlike plot_line_comparison there's no TUM-raceline overlay here: TUM's supplied raceline
+    is grip-invariant/fixed, not a reference for a specific mu.
+    """
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.plot(track.x_m, track.y_m, linewidth=0.6, color="#999999", label="centerline")
+    ax.plot(solution.x_m, solution.y_m, linewidth=1.0, label=f"min-time line (mu={solution.vehicle.mu:g})")
+    ax.set_aspect("equal")
+    ax.set_title(f"{track.circuit_name}: min-time line (lap time {solution.lap_time_s:.2f} s)")
+    ax.legend()
     fig.tight_layout()
     fig.savefig(output_path, dpi=300)
     plt.close(fig)

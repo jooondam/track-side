@@ -114,6 +114,30 @@ def assert_within_track_bounds(
         )
 
 
+def assert_friction_circle_respected(
+    ax_tire_mps2: np.ndarray,
+    ay_mps2: np.ndarray,
+    ay_max_mps2: np.ndarray,
+    rel_tol: float = 0.02,
+) -> None:
+    """raise if the tire force implied by (ax_tire, ay) ever exceeds the friction circle.
+
+    isotropic circle ax_tire^2 + ay^2 <= ay_max^2, the same physics GT3Vehicle.ay_max_mps2
+    encodes and M2's forward-backward solver enforces per-mode. Checked directly here against
+    an NLP solution where ax_tire and ay were free decision-adjacent quantities rather than
+    values already clipped to the circle by construction.
+    """
+    used = np.hypot(ax_tire_mps2, ay_mps2)
+    limit = ay_max_mps2 * (1.0 + rel_tol)
+    violations = np.nonzero(used > limit)[0]
+    if violations.size > 0:
+        worst = violations[np.argmax(used[violations] - limit[violations])]
+        raise AssertionError(
+            f"friction circle violated at {violations.size} point(s); worst at index {worst} "
+            f"(used={used[worst]:.3f} m/s2 > limit={ay_max_mps2[worst]:.3f} m/s2)"
+        )
+
+
 def lateral_deviation(line_a_xy: np.ndarray, line_b_xy: np.ndarray) -> dict[str, float]:
     """nearest-point distance stats between two (N, 2) polylines.
 
