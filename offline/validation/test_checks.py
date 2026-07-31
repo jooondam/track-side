@@ -14,7 +14,9 @@ from offline.validation.checks import (
     assert_energy_balance,
     assert_loop_closes,
     assert_no_normal_crossings,
+    assert_within_track_bounds,
     curvature_deviation,
+    lateral_deviation,
 )
 
 
@@ -90,3 +92,52 @@ def test_energy_balance_over_power_limit_raises() -> None:
     ax_mps2 = ax_tire_net - ax_drag
     with pytest.raises(AssertionError, match="power budget violated"):
         assert_energy_balance(v, ax_mps2, ax_drag, mass_kg, power_w)
+
+
+def test_within_bounds_passes() -> None:
+    offset = np.array([-2.0, 0.0, 2.0])
+    w_left = np.full(3, 3.0)
+    w_right = np.full(3, 3.0)
+    assert_within_track_bounds(offset, w_left, w_right)
+
+
+def test_beyond_left_boundary_raises() -> None:
+    offset = np.array([-2.0, 0.0, 3.5])
+    w_left = np.full(3, 3.0)
+    w_right = np.full(3, 3.0)
+    with pytest.raises(AssertionError, match="leaves the track"):
+        assert_within_track_bounds(offset, w_left, w_right)
+
+
+def test_beyond_right_boundary_raises() -> None:
+    offset = np.array([-3.5, 0.0, 2.0])
+    w_left = np.full(3, 3.0)
+    w_right = np.full(3, 3.0)
+    with pytest.raises(AssertionError, match="leaves the track"):
+        assert_within_track_bounds(offset, w_left, w_right)
+
+
+def test_within_bounds_margin_shrinks_the_valid_range() -> None:
+    # offset=2.5 fits inside width=3.0 with no margin, but not once margin_m=1.0 eats into it
+    offset = np.array([2.5])
+    w_left = np.array([3.0])
+    w_right = np.array([3.0])
+    assert_within_track_bounds(offset, w_left, w_right, margin_m=0.0)
+    with pytest.raises(AssertionError, match="leaves the track"):
+        assert_within_track_bounds(offset, w_left, w_right, margin_m=1.0)
+
+
+def test_lateral_deviation_identical_lines_is_zero() -> None:
+    line = np.column_stack([np.linspace(0, 10, 50), np.zeros(50)])
+    stats = lateral_deviation(line, line.copy())
+    assert stats["max_m"] == pytest.approx(0.0, abs=1e-9)
+    assert stats["mean_m"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_lateral_deviation_parallel_offset_lines_matches_offset() -> None:
+    s = np.linspace(0, 10, 200)
+    line_a = np.column_stack([s, np.zeros(200)])
+    line_b = np.column_stack([s, np.full(200, 1.5)])
+    stats = lateral_deviation(line_a, line_b)
+    assert stats["max_m"] == pytest.approx(1.5, abs=1e-2)
+    assert stats["mean_m"] == pytest.approx(1.5, abs=1e-2)

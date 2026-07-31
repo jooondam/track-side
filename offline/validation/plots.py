@@ -9,6 +9,8 @@ import numpy as np
 from matplotlib.collections import LineCollection
 
 from offline.geometry.pipeline import TrackGeometry
+from offline.geometry.raceline import RacelineGeometry
+from offline.mincurv.line import OptimizedLine
 from offline.velocity.solver import VelocityProfile
 
 PHASE_COLORS = {"accel": "#2ca02c", "brake": "#d62728", "coast": "#dddddd"}
@@ -82,6 +84,45 @@ def plot_velocity(profile: VelocityProfile, output_path: Path) -> None:
     ax_ay.set_xlabel("s [m]")
 
     fig.suptitle(f"{profile.circuit_name} velocity profile (lap time {profile.lap_time_s:.2f} s)")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+
+
+def plot_line_comparison(
+    track: TrackGeometry,
+    mincurv_line: OptimizedLine,
+    reference_raceline: RacelineGeometry,
+    output_path: Path,
+) -> None:
+    """save centerline + TUM's raceline + our minimum-curvature line, overlaid.
+
+    the direct "your line vs TUM's" visual for M3's deliverable.
+    """
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.plot(track.x_m, track.y_m, linewidth=0.6, color="#999999", label="centerline")
+    ax.plot(
+        reference_raceline.x_m, reference_raceline.y_m, linewidth=1.0, label="TUM raceline"
+    )
+    ax.plot(mincurv_line.x_m, mincurv_line.y_m, linewidth=1.0, label="our min-curvature line")
+    ax.set_aspect("equal")
+    ax.set_title(f"{track.circuit_name}: our line vs TUM's raceline")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+
+
+def plot_lateral_offset(mincurv_line: OptimizedLine, output_path: Path) -> None:
+    """save alpha(s) (lateral offset from the centerline) vs arc length, same style as
+    plot_curvature -- shows where and how much the optimized line pulls off-centre.
+    """
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(mincurv_line.s_m, mincurv_line.lateral_offset_m, linewidth=0.8)
+    ax.axhline(0.0, color="black", linewidth=0.5)
+    ax.set_xlabel("s [m]")
+    ax.set_ylabel("lateral offset [m] (+ = left)")
+    ax.set_title(f"{mincurv_line.circuit_name} minimum-curvature lateral offset")
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
