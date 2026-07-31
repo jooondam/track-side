@@ -1,0 +1,31 @@
+[
+  {
+    "mu": 0.8,
+    "status": "ok",
+    "lap_time_s": 126.4693261318137,
+    "solve_time_s": 12.473529290989973,
+    "ipopt_status": "Solve_Succeeded",
+    "n_iterations": 3191
+  },
+  {
+    "mu": 1.0,
+    "status": "ok",
+    "lap_time_s": 117.0839468662742,
+    "solve_time_s": 11.549771416030126,
+    "ipopt_status": "Solve_Succeeded",
+    "n_iterations": 2971
+  },
+  {
+    "mu": 1.2,
+    "status": "ok",
+    "lap_time_s": 111.07090933029917,
+    "solve_time_s": 12.974400707986206,
+    "ipopt_status": "Solve_Succeeded",
+    "n_iterations": 2466
+  },
+  {
+    "mu": 1.4,
+    "status": "failed",
+    "error": "minimum-time NLP failed to converge: IPOPT status 'Maximum_Iterations_Exceeded'"
+  }
+]
