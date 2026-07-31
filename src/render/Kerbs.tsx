@@ -1,6 +1,6 @@
 // procedural red/white kerbs on the inside edge of each corner: contiguous spans where the
 // centerline curvature exceeds a threshold, inside edge chosen by curvature's sign (positive
-// kappa = turning toward the left boundary in this data's convention). Instanced -- two draw
+// kappa = turning toward the left boundary in this data's convention). Instanced: two draw
 // calls total regardless of how many kerb segments a circuit has.
 
 import { useEffect, useMemo, useRef } from "react";

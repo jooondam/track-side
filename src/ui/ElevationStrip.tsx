@@ -1,4 +1,4 @@
-// mini z(s) sparkline, cursor synced to the car marker -- ties the 3D view back to the M5
+// mini z(s) sparkline, cursor synced to the car marker: ties the 3D view back to the M5
 // elevation deliverable. Draws in its own rAF loop reading the shared mutable progress ref,
 // so the 60 Hz cursor costs zero React re-renders. Click/drag scrubs the car, same as the
 // speed trace above it. Positioned by the parent (stacked bottom panel), not self-positioned.

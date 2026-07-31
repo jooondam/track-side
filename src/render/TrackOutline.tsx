@@ -1,6 +1,6 @@
 // the accurate road outline: white edge lines along both real boundary polylines (TUMFTM
 // widths, the same geometry the ribbon mesh uses), a faint dashed centerline, and a
-// checkered start/finish strip -- what makes the ribbon read as a road and the car's lateral
+// checkered start/finish strip: what makes the ribbon read as a road and the car's lateral
 // position on it legible.
 
 import { Line } from "@react-three/drei";

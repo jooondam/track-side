@@ -82,7 +82,7 @@ export function Scene({
     >
       <color attach="background" args={["#0a0a0f"]} />
       {/* fog pushed way out: at extent*1.2 it was swallowing the track colours the moment
-          the camera pulled back -- depth cueing now comes from the terrain grid instead */}
+          the camera pulled back: depth cueing now comes from the terrain grid instead */}
       <fog attach="fog" args={["#0a0a0f", extent * 3, extent * 8]} />
       <hemisphereLight args={["#3a3a4a", "#0c0c10", 1.1]} />
       <directionalLight position={[center[0] + 600, 900, center[2] - 400]} intensity={1.4} />

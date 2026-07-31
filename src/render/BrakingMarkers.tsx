@@ -1,5 +1,5 @@
 // braking-point markers: a red wedge where each braking zone begins, recomputed from the
-// live velocity profile -- drag the grip slider and watch the braking points physically
+// live velocity profile: drag the grip slider and watch the braking points physically
 // move up and down the road. Fixed-capacity InstancedMesh; extra instances are hidden by
 // zero-scaling their matrices.
 

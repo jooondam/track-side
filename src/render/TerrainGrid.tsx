@@ -1,5 +1,5 @@
 // landscape context: a translucent wireframe grid displaced by the IDW terrain heights from
-// terrain.json -- accurate where the track's registered elevation constrains it, honestly
+// terrain.json: accurate where the track's registered elevation constrains it, honestly
 // smoothed elsewhere. Fades out as the camera descends into it (reads as landscape from
 // above, gets out of the way in follow cam / low orbit).
 

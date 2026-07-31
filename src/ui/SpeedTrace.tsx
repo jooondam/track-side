@@ -1,7 +1,7 @@
 // the race-engineer chart: v(s) in km/h, phase-coloured, with the car's live position as a
 // cursor. Hover inspects (shares the same probe as the 3D line); click/drag scrubs the car.
 // Static polyline is drawn to an offscreen canvas only when the result changes; the visible
-// canvas composites polyline + cursor per frame from the shared ref -- zero React re-renders.
+// canvas composites polyline + cursor per frame from the shared ref: zero React re-renders.
 
 import { useEffect, useRef } from "react";
 import type { LineData } from "../assets";
