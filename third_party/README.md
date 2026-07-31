@@ -8,4 +8,5 @@ unmodified copy with the license notice present is the basis for LGPL/ODbL
 compliance (see `/docs/DESIGN_NOTES.md` §5). If a file here needs to change, that
 is a licensing question to raise explicitly, not a cleanup task.
 
-Expected contents: TUMFTM `racetrack-database` CSVs + their `LICENSE` file.
+Expected contents: TUMFTM `racetrack-database` centerline CSVs (`tracks/`), raceline CSVs
+(`racelines/`), and their `LICENSE` file.
