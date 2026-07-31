@@ -1,7 +1,6 @@
 // the accurate road outline: white edge lines along both real boundary polylines (TUMFTM
-// widths, the same geometry the ribbon mesh uses), a faint dashed centerline, and a
-// checkered start/finish strip: what makes the ribbon read as a road and the car's lateral
-// position on it legible.
+// widths, the same geometry the ribbon mesh uses) and a checkered start/finish strip: what
+// makes the ribbon read as a road and the car's lateral position on it legible.
 
 import { Line } from "@react-three/drei";
 import { useMemo } from "react";
@@ -83,13 +82,11 @@ function StartFinishStrip({ trackLines }: { trackLines: TrackLines }) {
 export function TrackOutline({ trackLines }: { trackLines: TrackLines }) {
   const left = useMemo(() => toPoints(trackLines.boundaryLeft, EDGE_LIFT), [trackLines]);
   const right = useMemo(() => toPoints(trackLines.boundaryRight, EDGE_LIFT), [trackLines]);
-  const center = useMemo(() => toPoints(trackLines.centerline, EDGE_LIFT * 0.7), [trackLines]);
 
   return (
     <>
       <Line points={left} color="#c8c8d0" lineWidth={1.5} />
       <Line points={right} color="#c8c8d0" lineWidth={1.5} />
-      <Line points={center} color="#45454f" lineWidth={1} dashed dashSize={4} gapSize={6} />
       <StartFinishStrip trackLines={trackLines} />
     </>
   );

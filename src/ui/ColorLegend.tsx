@@ -22,6 +22,7 @@ const boxStyle: React.CSSProperties = {
   borderRadius: 6,
   fontSize: 11,
   userSelect: "none",
+  color: "#d8d8e0",
 };
 
 function Swatch({ color, label }: { color: string; label: string }) {

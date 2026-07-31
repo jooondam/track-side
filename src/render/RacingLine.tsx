@@ -73,6 +73,15 @@ export function RacingLine({ line, result, colorMode, onHoverIndex }: RacingLine
     [line],
   );
 
+  // stable identity per circuit: an inline array here would hand drei a new prop identity on
+  // every render, making it rebuild the geometry with these placeholder colours and wipe the
+  // imperatively-set phase/speed colours (the "line goes grey" bug)
+  const placeholderColors = useMemo(
+    () =>
+      Array.from({ length: line.nPoints }, () => [0.5, 0.5, 0.5] as [number, number, number]),
+    [line],
+  );
+
   useEffect(() => {
     const scratch: [number, number, number] = [0, 0, 0];
     let vMin = Infinity;
@@ -102,7 +111,7 @@ export function RacingLine({ line, result, colorMode, onHoverIndex }: RacingLine
     <Line
       ref={lineRef}
       points={liftedPoints}
-      vertexColors={Array.from({ length: line.nPoints }, () => [0.5, 0.5, 0.5])}
+      vertexColors={placeholderColors}
       lineWidth={3}
       onPointerMove={(e) => {
         if (!onHoverIndex) return;

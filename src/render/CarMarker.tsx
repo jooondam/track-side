@@ -109,63 +109,134 @@ export function CarMarker({
     }
   });
 
-  const bodyProps = ghost
-    ? { color: "#8a8a94", transparent: true, opacity: 0.35, roughness: 0.6, metalness: 0.1 }
-    : { color: "#15151c", roughness: 0.4, metalness: 0.6 };
-  const cabinProps = ghost
+  // the body is an extruded 2D side profile (nose, rising hood, raked windshield, roof,
+  // fastback tail): dramatically more car-shaped than stacked boxes, still zero assets.
+  // shape x axis = car length with the nose at +x; rotation.y = PI/2 maps shape +x to world
+  // -z, which is this marker's direction of travel, and the extrusion (local +z, the car's
+  // width) onto world +x.
+  const bodyGeometry = useMemo(() => {
+    const profile = new THREE.Shape();
+    profile.moveTo(2.2, 0.1); // front floor
+    profile.lineTo(2.28, 0.24); // splitter lip
+    profile.lineTo(2.18, 0.44); // nose
+    profile.lineTo(1.15, 0.6); // hood
+    profile.lineTo(0.55, 0.64); // windshield base
+    profile.lineTo(0.02, 1.06); // roof front
+    profile.lineTo(-0.78, 1.02); // roof rear
+    profile.lineTo(-1.6, 0.7); // rear window to deck
+    profile.lineTo(-2.12, 0.68); // deck
+    profile.lineTo(-2.2, 0.42); // tail cut
+    profile.lineTo(-2.14, 0.1); // rear floor
+    profile.closePath();
+    const geo = new THREE.ExtrudeGeometry(profile, {
+      depth: 1.66,
+      bevelEnabled: true,
+      bevelThickness: 0.09,
+      bevelSize: 0.09,
+      bevelSegments: 2,
+    });
+    return geo;
+  }, []);
+
+  const paint = ghost
     ? { color: "#8a8a94", transparent: true, opacity: 0.3, roughness: 0.6, metalness: 0.1 }
-    : { color: "#101016", roughness: 0.3, metalness: 0.7 };
+    : { color: "#ff6a00", roughness: 0.35, metalness: 0.25, emissive: "#992e00", emissiveIntensity: 0.25 };
+  const carbon = ghost
+    ? { color: "#8a8a94", transparent: true, opacity: 0.3, roughness: 0.6, metalness: 0.1 }
+    : { color: "#111116", roughness: 0.5, metalness: 0.4 };
+  const glass = ghost
+    ? { color: "#8a8a94", transparent: true, opacity: 0.25, roughness: 0.6, metalness: 0.1 }
+    : { color: "#0c1218", roughness: 0.15, metalness: 0.8 };
 
   return (
     <group ref={groupRef} scale={[3, 3, 3]}>
-      {/* body: wide, low box */}
-      <mesh position={[0, 0.35, 0]}>
-        <boxGeometry args={[1.9, 0.5, 4.4]} />
-        <meshStandardMaterial {...bodyProps} />
+      {/* painted body shell */}
+      <mesh geometry={bodyGeometry} rotation={[0, Math.PI / 2, 0]} position={[-0.92, 0, 0]}>
+        <meshStandardMaterial {...paint} />
       </mesh>
-      {/* cabin wedge */}
-      <mesh position={[0, 0.75, 0.25]}>
-        <boxGeometry args={[1.35, 0.42, 1.9]} />
-        <meshStandardMaterial {...cabinProps} />
+      {/* greenhouse: a hair wider than the shell so it reads as wraparound glazing */}
+      <mesh position={[0, 0.82, 0.35]}>
+        <boxGeometry args={[1.9, 0.32, 1.5]} />
+        <meshStandardMaterial {...glass} />
       </mesh>
-      {/* glowing accent stripe (live car only) */}
+      {/* front splitter */}
+      <mesh position={[0, 0.12, -2.1]}>
+        <boxGeometry args={[2.0, 0.05, 0.55]} />
+        <meshStandardMaterial {...carbon} />
+      </mesh>
+      {/* rear diffuser hint */}
+      <mesh position={[0, 0.14, 2.05]}>
+        <boxGeometry args={[1.9, 0.08, 0.4]} />
+        <meshStandardMaterial {...carbon} />
+      </mesh>
+      {/* rear wing + endplates on swan-neck pylons */}
+      <mesh position={[0, 1.06, 2.0]}>
+        <boxGeometry args={[1.8, 0.05, 0.5]} />
+        <meshStandardMaterial {...carbon} />
+      </mesh>
+      <mesh position={[-0.88, 1.02, 2.0]}>
+        <boxGeometry args={[0.04, 0.3, 0.55]} />
+        <meshStandardMaterial {...carbon} />
+      </mesh>
+      <mesh position={[0.88, 1.02, 2.0]}>
+        <boxGeometry args={[0.04, 0.3, 0.55]} />
+        <meshStandardMaterial {...carbon} />
+      </mesh>
+      <mesh position={[-0.45, 0.85, 1.95]}>
+        <boxGeometry args={[0.07, 0.4, 0.14]} />
+        <meshStandardMaterial {...carbon} />
+      </mesh>
+      <mesh position={[0.45, 0.85, 1.95]}>
+        <boxGeometry args={[0.07, 0.4, 0.14]} />
+        <meshStandardMaterial {...carbon} />
+      </mesh>
+      {/* headlights and taillight bar */}
       {!ghost && (
-        <mesh position={[0, 0.62, 0]}>
-          <boxGeometry args={[0.12, 0.02, 4.2]} />
-          <meshStandardMaterial color="#00e5ff" emissive="#00e5ff" emissiveIntensity={2.0} />
-        </mesh>
+        <>
+          <mesh position={[-0.62, 0.46, -2.14]}>
+            <boxGeometry args={[0.42, 0.1, 0.08]} />
+            <meshStandardMaterial color="#eef4ff" emissive="#cfe4ff" emissiveIntensity={2.2} />
+          </mesh>
+          <mesh position={[0.62, 0.46, -2.14]}>
+            <boxGeometry args={[0.42, 0.1, 0.08]} />
+            <meshStandardMaterial color="#eef4ff" emissive="#cfe4ff" emissiveIntensity={2.2} />
+          </mesh>
+          <mesh position={[0, 0.58, 2.16]}>
+            <boxGeometry args={[1.5, 0.07, 0.05]} />
+            <meshStandardMaterial color="#ff2020" emissive="#ff2020" emissiveIntensity={2.0} />
+          </mesh>
+        </>
       )}
-      {/* rear wing on swan-neck pylons */}
-      <mesh position={[0, 0.95, 2.0]}>
-        <boxGeometry args={[1.7, 0.06, 0.45]} />
-        <meshStandardMaterial {...bodyProps} />
-      </mesh>
-      <mesh position={[-0.5, 0.75, 2.05]}>
-        <boxGeometry args={[0.08, 0.35, 0.12]} />
-        <meshStandardMaterial {...bodyProps} />
-      </mesh>
-      <mesh position={[0.5, 0.75, 2.05]}>
-        <boxGeometry args={[0.08, 0.35, 0.12]} />
-        <meshStandardMaterial {...bodyProps} />
-      </mesh>
-      {/* wheels */}
+      {/* wheels: tire + bright rim disc so the wheels read at distance */}
       {(
         [
-          [-0.85, 1.45],
-          [0.85, 1.45],
-          [-0.85, -1.45],
-          [0.85, -1.45],
+          [-0.86, 1.42],
+          [0.86, 1.42],
+          [-0.86, -1.42],
+          [0.86, -1.42],
         ] as const
       ).map(([wx, wz], i) => (
-        <mesh key={i} position={[wx, 0.32, wz]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.32, 0.32, 0.3, 16]} />
-          <meshStandardMaterial
-            color="#050508"
-            roughness={0.8}
-            transparent={ghost}
-            opacity={ghost ? 0.35 : 1}
-          />
-        </mesh>
+        <group key={i} position={[wx, 0.34, wz]} rotation={[0, 0, Math.PI / 2]}>
+          <mesh>
+            <cylinderGeometry args={[0.34, 0.34, 0.3, 20]} />
+            <meshStandardMaterial
+              color="#050508"
+              roughness={0.85}
+              transparent={ghost}
+              opacity={ghost ? 0.3 : 1}
+            />
+          </mesh>
+          <mesh position={[0, wx > 0 ? 0.16 : -0.16, 0]}>
+            <cylinderGeometry args={[0.2, 0.2, 0.02, 12]} />
+            <meshStandardMaterial
+              color="#b8b8c2"
+              roughness={0.3}
+              metalness={0.8}
+              transparent={ghost}
+              opacity={ghost ? 0.3 : 1}
+            />
+          </mesh>
+        </group>
       ))}
     </group>
   );

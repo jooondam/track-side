@@ -42,12 +42,12 @@ export function CornerLabels({ line, corners, exaggeration }: CornerLabelsProps)
           center
           distanceFactor={420}
           style={{
-            color: "#9a9aa8",
+            color: "#3c3f46",
             fontSize: "13px",
             fontFamily: "inherit",
             whiteSpace: "nowrap",
             pointerEvents: "none",
-            textShadow: "0 0 6px #000",
+            textShadow: "0 0 6px #fff",
           }}
         >
           {label.name}

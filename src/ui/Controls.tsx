@@ -43,6 +43,7 @@ const panelStyle: React.CSSProperties = {
   lineHeight: 1.9,
   userSelect: "none",
   width: 250,
+  color: "#d8d8e0", // panels are dark chrome over the light scene; don't inherit body text
 };
 
 const buttonStyle: React.CSSProperties = {

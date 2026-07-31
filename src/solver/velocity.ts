@@ -177,6 +177,10 @@ export class VelocitySolver {
         r.axMps2[i] > threshold ? PHASE_ACCEL : r.axMps2[i] < -threshold ? PHASE_BRAKE : PHASE_COAST;
     }
     r.lapTimeS = lapTime;
-    return r;
+    // return a fresh wrapper object per solve (arrays still shared and mutated in place):
+    // React dependency arrays key on the result's identity, and returning the same object
+    // every call made [result] effects silently skip re-running on slider changes: colours,
+    // braking markers, and lap tables all froze on the first solve's output
+    return { vMps: r.vMps, axMps2: r.axMps2, ayMps2: r.ayMps2, phase: r.phase, lapTimeS: lapTime };
   }
 }
