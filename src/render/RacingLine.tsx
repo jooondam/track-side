@@ -36,7 +36,7 @@ const VIRIDIS: [number, number, number][] = [
   [0.993, 0.906, 0.144],
 ];
 
-function viridis(t: number, out: [number, number, number]): void {
+export function viridis(t: number, out: [number, number, number]): void {
   const clamped = Math.min(Math.max(t, 0), 1);
   const scaled = clamped * (VIRIDIS.length - 1);
   const i = Math.min(Math.floor(scaled), VIRIDIS.length - 2);
