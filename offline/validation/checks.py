@@ -42,6 +42,51 @@ def assert_no_normal_crossings(
         )
 
 
+def assert_closed_loop_velocity(v_mps: np.ndarray, tol: float = 1e-2) -> None:
+    """raise if the velocity profile's start and end speed don't match.
+
+    the M2 solver constructs v(L) as an exact copy of v(0) by convention, so this should be a
+    near-no-op in normal operation -- defense-in-depth against a regression, matching M1's
+    assert_loop_closes.
+    """
+    gap = abs(float(v_mps[0]) - float(v_mps[-1]))
+    if gap > tol:
+        raise AssertionError(
+            f"velocity profile does not close the loop: v(0)={v_mps[0]:.4f} m/s, "
+            f"v(L)={v_mps[-1]:.4f} m/s, gap={gap:.4f} m/s > tolerance {tol} m/s"
+        )
+
+
+def assert_energy_balance(
+    v_mps: np.ndarray,
+    ax_mps2: np.ndarray,
+    ax_drag_mps2: np.ndarray,
+    mass_kg: float,
+    power_w: float,
+    rel_tol: float = 0.02,
+) -> None:
+    """raise if any point implies more propulsive power than the engine can deliver.
+
+    a naive check that realized kinetic energy sums to zero around the closed lap would be
+    tautological here: ax_mps2 is defined as the exact segment-average (v_next^2-v^2)/(2*ds),
+    so it telescopes to (v(L)^2 - v(0)^2)/2 = 0 by construction regardless of whether the
+    underlying physics was implemented correctly. What can actually catch a bug: whether the
+    composed accel budget (friction circle + drag + engine cap) ever implies more power than
+    the vehicle's engine can deliver -- net tire force is ax_mps2 + ax_drag_mps2 (drag always
+    subtracts from realized accel, so adding it back isolates the tire's own contribution).
+    """
+    ax_tire_net = ax_mps2 + ax_drag_mps2
+    power_used_w = mass_kg * ax_tire_net * v_mps
+    violations = np.nonzero(power_used_w > power_w * (1.0 + rel_tol))[0]
+    if violations.size > 0:
+        worst = violations[np.argmax(power_used_w[violations])]
+        raise AssertionError(
+            f"power budget violated at {violations.size} point(s); worst at index {worst} "
+            f"(power used {power_used_w[worst] / 1000:.1f} kW > "
+            f"limit {power_w / 1000:.1f} kW)"
+        )
+
+
 def curvature_deviation(kappa: np.ndarray, kappa_reference: np.ndarray) -> dict[str, float]:
     """compare computed curvature against a published/reference curve.
 
