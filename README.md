@@ -4,12 +4,14 @@ Ideal racing line optimizer for GT3 cars: minimum-curvature and minimum-time
 trajectory planning on real circuit geometry, with an interactive 3D track
 viewer as the delivery layer.
 
-Status: M1–M3 done: clean track geometry, a velocity profile solver, and a minimum-curvature
-path solver, all validated against TUM's vendored Monza raceline. M4's offline min-time NLP
-reference (`offline/reference/mintime.py`, swept over a μ grid by `offline/build_mintime.py`)
-is built. The racing line itself is grip-invariant by design (see `docs/DESIGN_NOTES.md`
-section 0.1); the interactive slider drives the velocity profile, not the path. M5 (elevation
-and mesh) is next.
+Status: M1–M5 done: clean track geometry, a velocity profile solver, a minimum-curvature path
+solver, and an offline min-time NLP reference over a μ grid, all validated on real Monza. The
+racing line itself is grip-invariant by design (see `docs/DESIGN_NOTES.md` section 0.1); the
+interactive slider drives the velocity profile, not the path. M5 adds elevation and a 3D mesh:
+real 2023 Belgian GP car-location data (OpenF1) registered onto the vendored Spa centerline
+(`offline/elevation/`), producing a relative z(s) profile that reproduces Eau Rouge's ~40 m
+climb and Spa's ~100 m total range, triangulated into a glTF track surface
+(`offline/mesh/`, `artifacts/spa/track.glb`). M6, the in-browser 3D viewer, is next.
 
 ## Data rights and attribution
 
