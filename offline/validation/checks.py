@@ -170,3 +170,43 @@ def curvature_deviation(kappa: np.ndarray, kappa_reference: np.ndarray) -> dict[
         "rmse": float(np.sqrt(np.mean(diff**2))),
         "mean_error": float(np.mean(diff)),
     }
+
+
+def assert_elevation_plausible(
+    z_m: np.ndarray,
+    s_m: np.ndarray,
+    expected_max_rise_m: float,
+    expected_total_range_m: float,
+    rise_window_m: float = 500.0,
+    rel_tol: float = 0.5,
+) -> None:
+    """raise unless the profile's steepest sustained rise and total range land in loose bands
+    around a circuit's documented figures (e.g. Spa: ~40 m Eau Rouge climb, ~100 m total).
+
+    the rise location is found by rolling-window search rather than hardcoded arc length --
+    the documented landmark's exact s-position isn't known precisely. Bands are deliberately
+    wide (rel_tol=0.5 -> a 2x scale error lands outside on either metric); this is the
+    DESIGN_NOTES section 3 M5 test "if you're out by a factor of two you'll see it
+    immediately," as an assertion instead of an eyeball.
+    """
+    spacing = float(np.median(np.diff(s_m)))
+    window = max(1, int(round(rise_window_m / spacing)))
+    if window >= len(z_m):
+        raise ValueError(f"rise_window_m={rise_window_m} exceeds the profile length")
+
+    rises = z_m[window:] - z_m[:-window]
+    max_rise = float(np.max(rises))
+    lo, hi = expected_max_rise_m * (1 - rel_tol), expected_max_rise_m * (1 + rel_tol)
+    if not (lo <= max_rise <= hi):
+        raise AssertionError(
+            f"steepest {rise_window_m:.0f} m-window rise is {max_rise:.1f} m, outside "
+            f"[{lo:.1f}, {hi:.1f}] m around the documented {expected_max_rise_m:.0f} m"
+        )
+
+    total_range = float(np.max(z_m) - np.min(z_m))
+    lo, hi = expected_total_range_m * (1 - rel_tol), expected_total_range_m * (1 + rel_tol)
+    if not (lo <= total_range <= hi):
+        raise AssertionError(
+            f"total elevation range is {total_range:.1f} m, outside [{lo:.1f}, {hi:.1f}] m "
+            f"around the documented {expected_total_range_m:.0f} m"
+        )

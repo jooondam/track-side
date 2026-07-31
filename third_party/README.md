@@ -10,3 +10,10 @@ is a licensing question to raise explicitly, not a cleanup task.
 
 Expected contents: TUMFTM `racetrack-database` centerline CSVs (`tracks/`), raceline CSVs
 (`racelines/`), and their `LICENSE` file.
+
+`openf1/` holds cached historical car-location samples fetched once from the OpenF1 API
+(openf1.org, an unofficial project unaffiliated with the Formula 1 companies) by
+`offline/ingest/openf1.py` -- raw API responses reduced to CSV, not covered by the TUMFTM
+LICENSE file. See the attribution block in the repository README; rights in the underlying
+timing data sit with Formula 1, which is why only a handful of laps are cached here rather
+than bulk telemetry (docs/DESIGN_NOTES.md §5).
