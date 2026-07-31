@@ -80,20 +80,21 @@ export function Scene({
       }}
       dpr={[1, 2]}
     >
-      <color attach="background" args={["#0a0a0f"]} />
+      {/* light background: the near-black original hid the dark asphalt at distance */}
+      <color attach="background" args={["#dfe1e6"]} />
       {/* fog pushed way out: at extent*1.2 it was swallowing the track colours the moment
-          the camera pulled back: depth cueing now comes from the terrain grid instead */}
-      <fog attach="fog" args={["#0a0a0f", extent * 3, extent * 8]} />
-      <hemisphereLight args={["#3a3a4a", "#0c0c10", 1.1]} />
-      <directionalLight position={[center[0] + 600, 900, center[2] - 400]} intensity={1.4} />
+          the camera pulled back: depth cueing now comes from the terrain dots instead */}
+      <fog attach="fog" args={["#dfe1e6", extent * 3, extent * 8]} />
+      <hemisphereLight args={["#f2f4f8", "#8c8f96", 1.0]} />
+      <directionalLight position={[center[0] + 600, 900, center[2] - 400]} intensity={1.2} />
 
       <Grid
         position={[center[0], -1.5, center[2]]}
         args={[extent * 3, extent * 3]}
         cellSize={100}
-        cellColor="#16161e"
+        cellColor="#c6c9cf"
         sectionSize={500}
-        sectionColor="#20202c"
+        sectionColor="#aab0b8"
         fadeDistance={extent * 2.2}
         infiniteGrid={false}
       />

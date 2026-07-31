@@ -53,7 +53,7 @@ def _to_yup(x_m: np.ndarray, y_m: np.ndarray, z_m: np.ndarray) -> np.ndarray:
 
 
 def _terrain_grid(
-    track, z_m: np.ndarray, n_cells: int = 90, margin_frac: float = 0.35
+    track, z_m: np.ndarray, n_cells: int = 140, margin_frac: float = 0.35
 ) -> dict:
     """IDW-interpolated landscape height grid around the circuit, in the Y-up frame's ground
     plane (grid axes are gltf x and z = -track_y; heights are gltf y).

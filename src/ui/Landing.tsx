@@ -26,6 +26,7 @@ const panelStyle: React.CSSProperties = {
   borderRadius: 8,
   fontSize: 13,
   lineHeight: 1.75,
+  color: "#d8d8e0",
 };
 
 const kbdStyle: React.CSSProperties = {
