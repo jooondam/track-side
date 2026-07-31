@@ -68,7 +68,7 @@ export function CameraRig({ mode, onModeChange, center, extent, carPoseRef }: Ca
         -((e.clientY - rect.top) / rect.height) * 2 + 1,
       );
       raycaster.setFromCamera(ndc, camera);
-      // intersect the ground plane band around track height -- robust without needing scene refs
+      // intersect the ground plane band around track height: robust without needing scene refs
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -carPoseRef.current.position.y);
       const hit = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, hit)) {

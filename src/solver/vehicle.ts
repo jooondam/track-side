@@ -1,6 +1,6 @@
 // GT3 point-mass vehicle model: TypeScript mirror of offline/velocity/vehicle.py.
 // parameter values are never hardcoded here; they load from public/<circuit>/vehicle.json,
-// which offline/build_viewer_assets.py exports from the Python dataclass -- one source of
+// which offline/build_viewer_assets.py exports from the Python dataclass: one source of
 // truth for physics constants. Only mu is varied at runtime (the grip slider).
 
 export interface GT3Vehicle {

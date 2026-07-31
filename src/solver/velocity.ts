@@ -1,6 +1,6 @@
 // forward-backward velocity profile solver: TypeScript port of offline/velocity/solver.py.
 // cross-validated against the Python solver's output in velocity.test.ts (lap time within
-// 0.1 s, v(s) pointwise within 0.1 m/s on both committed circuit fixtures) -- the port is
+// 0.1 s, v(s) pointwise within 0.1 m/s on both committed circuit fixtures): the port is
 // trusted because it matches, not because it looks the same.
 //
 // designed for the grip slider's per-drag recompute: create a VelocitySolver once per

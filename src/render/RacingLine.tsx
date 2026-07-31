@@ -1,7 +1,7 @@
 // the hero element: the racing line as a fat line, recoloured in place on every solve.
 // phase mode mirrors offline/validation/plots.py's PHASE_COLORS; speed mode approximates the
 // viridis ramp the repo's speed_map plot uses. Colours are written into a preallocated array
-// and pushed with geometry.setColors -- the geometry/positions are never rebuilt, and the
+// and pushed with geometry.setColors: the geometry/positions are never rebuilt, and the
 // component never remounts on slider changes (DESIGN_NOTES M6's in-place update requirement).
 
 import { Line } from "@react-three/drei";

@@ -1,5 +1,5 @@
 // cumulative-time table over a lap: the shared arc-length <-> time mapping used by the car
-// marker, the timeline scrubber, and the ghost car -- one implementation so they always
+// marker, the timeline scrubber, and the ghost car: one implementation so they always
 // agree on where the car is at time t.
 
 export interface LapTimeTable {

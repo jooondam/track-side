@@ -1,5 +1,5 @@
 // app wiring: circuit selection, asset loading, the solver, and shared state between the
-// HUD and the scene. The solver recomputes synchronously on every slider change -- it's
+// HUD and the scene. The solver recomputes synchronously on every slider change: it's
 // low-single-digit milliseconds for a ~7000-point circuit (measured and shown in the HUD),
 // so no debouncing, no worker, no async plumbing.
 

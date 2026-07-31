@@ -1,5 +1,5 @@
 // animated car marker: a procedural low-poly GT3 silhouette driving the racing line at the
-// *solved* v(s) -- it crawls through hairpins and flies down straights because its position
+// *solved* v(s): it crawls through hairpins and flies down straights because its position
 // comes from integrating the actual velocity profile, not a constant parameter speed.
 //
 // the silhouette is deliberately generic (wide body, cabin wedge, big rear wing): real GT3
@@ -7,7 +7,7 @@
 // likenesses out of the UI entirely, so no downloaded car model.
 //
 // the same component renders the optional ghost car (fixed reference grip): transparent grey
-// materials, no accent stripe, its own velocity profile -- the visual gap between ghost and
+// materials, no accent stripe, its own velocity profile: the visual gap between ghost and
 // live car is the grip story told physically.
 
 import { useFrame } from "@react-three/fiber";
@@ -59,7 +59,7 @@ export function CarMarker({
 
   // scrub requests apply even while a different result is animating (table changes reset
   // nothing: sRef survives solver updates so the car doesn't teleport on slider drags).
-  // only the live car owns the shared progress fields -- the ghost must not clobber them.
+  // only the live car owns the shared progress fields: the ghost must not clobber them.
   useEffect(() => {
     if (progressRef && !ghost) progressRef.current.lapTimeS = table.lapTimeS;
   }, [table, progressRef, ghost]);

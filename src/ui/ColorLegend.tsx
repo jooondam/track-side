@@ -1,5 +1,5 @@
 // legend for what the line colours mean. Phase mode: labelled swatches. Speed mode: the
-// exact viridis ramp the 3D line uses, with live km/h ticks -- the mapping is normalised to
+// exact viridis ramp the 3D line uses, with live km/h ticks: the mapping is normalised to
 // the current solve's min/max, so the legend has to be too.
 
 import { useMemo } from "react";

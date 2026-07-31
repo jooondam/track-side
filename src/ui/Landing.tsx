@@ -1,5 +1,5 @@
 // landing overlay: the first thing a visitor (or interviewer) sees. Explains what the tool
-// is, what the physics underneath is doing, and how to drive it -- then gets out of the way.
+// is, what the physics underneath is doing, and how to drive it: then gets out of the way.
 // The scene loads behind it, so entering is instant.
 
 interface LandingProps {
@@ -52,13 +52,13 @@ export function Landing({ onEnter }: LandingProps) {
           circuit geometry, validated against TUM&apos;s published raceline and a
           minimum-time NLP reference. The 3D circuits are real too: elevation comes from 2023
           F1 car telemetry (OpenF1), registered onto the track and verified against each
-          circuit&apos;s documented profile — Eau Rouge climbs ~40 m here because it does in
+          circuit&apos;s documented profile: Eau Rouge climbs ~40 m here because it does in
           Belgium.
         </p>
         <p style={{ color: "#b8b8c4" }}>
           The physics is live. Drag the <span style={kbdStyle}>grip μ</span> slider and a
-          velocity-profile solver — the same forward-backward algorithm as the offline
-          pipeline, ported to TypeScript and cross-validated against it — re-solves the whole
+          velocity-profile solver (the same forward-backward algorithm as the offline
+          pipeline, ported to TypeScript and cross-validated against it) re-solves the whole
           lap in your browser in a few milliseconds. Braking points move, corner speeds
           change, the lap time updates, and the car marker drives it all at the solved speed.
         </p>
