@@ -33,7 +33,7 @@ def plot_curvature(track: TrackGeometry, output_path: Path) -> None:
         f"s={track.smoothing_factor:.2f})"
     )
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
 
@@ -51,7 +51,7 @@ def plot_boundaries(track: TrackGeometry, output_path: Path) -> None:
     ax.set_title(f"{track.circuit_name} boundaries")
     ax.legend()
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
 
@@ -85,7 +85,7 @@ def plot_velocity(profile: VelocityProfile, output_path: Path) -> None:
 
     fig.suptitle(f"{profile.circuit_name} velocity profile (lap time {profile.lap_time_s:.2f} s)")
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
 
@@ -109,7 +109,7 @@ def plot_line_comparison(
     ax.set_title(f"{track.circuit_name}: our line vs TUM's raceline")
     ax.legend()
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
 
@@ -124,7 +124,7 @@ def plot_lateral_offset(mincurv_line: OptimizedLine, output_path: Path) -> None:
     ax.set_ylabel("lateral offset [m] (+ = left)")
     ax.set_title(f"{mincurv_line.circuit_name} minimum-curvature lateral offset")
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
 
@@ -145,5 +145,5 @@ def plot_speed_map(profile: VelocityProfile, output_path: Path) -> None:
     colorbar.set_label("speed [km/h]")
 
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
