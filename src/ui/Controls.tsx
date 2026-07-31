@@ -1,6 +1,7 @@
 // the HUD: track switcher, grip slider, readouts, toggles. Plain DOM over the canvas,
 // dark-telemetry styling inherited from index.html's monospace/near-black base.
 
+import type { CameraMode } from "../render/CameraRig";
 import type { ColorMode } from "../render/RacingLine";
 import type { TrackDefinition } from "../tracks";
 
@@ -11,13 +12,18 @@ interface ControlsProps {
   mu: number;
   onMuChange: (mu: number) => void;
   lapTimeS: number;
+  ghostLapTimeS: number | null;
   solveMs: number;
   colorMode: ColorMode;
   onColorModeChange: (mode: ColorMode) => void;
+  cameraMode: CameraMode;
+  onCameraModeChange: (mode: CameraMode) => void;
   playing: boolean;
   onPlayingChange: (playing: boolean) => void;
   speedMultiplier: number;
   onSpeedMultiplierChange: (mult: number) => void;
+  ghostEnabled: boolean;
+  onGhostEnabledChange: (enabled: boolean) => void;
   exaggeration: number;
   onExaggerationChange: (factor: number) => void;
   showPerf: boolean;
@@ -101,6 +107,15 @@ export function Controls(props: ControlsProps) {
       <div>
         lap time <b style={{ color: "#fff" }}>{formatLapTime(props.lapTimeS)}</b>
         <span style={{ color: "#6a6a78" }}> · solve {props.solveMs.toFixed(1)} ms</span>
+        {props.ghostLapTimeS !== null && (
+          <div style={{ color: "#9a9aa8" }}>
+            ghost μ1.20 <b>{formatLapTime(props.ghostLapTimeS)}</b>{" "}
+            <span style={{ color: props.lapTimeS <= props.ghostLapTimeS ? "#2ba22b" : "#d62728" }}>
+              ({props.lapTimeS <= props.ghostLapTimeS ? "-" : "+"}
+              {Math.abs(props.lapTimeS - props.ghostLapTimeS).toFixed(2)} s)
+            </span>
+          </div>
+        )}
       </div>
 
       <div>
@@ -120,14 +135,30 @@ export function Controls(props: ControlsProps) {
       </div>
 
       <div>
-        lap{" "}
+        camera{" "}
+        {(["free", "follow", "top"] as const).map((mode) => (
+          <button
+            key={mode}
+            style={props.cameraMode === mode ? activeButtonStyle : buttonStyle}
+            onClick={() => props.onCameraModeChange(mode)}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
+
+      <div>
         <button
-          style={props.playing ? activeButtonStyle : buttonStyle}
+          style={{
+            ...(props.playing ? activeButtonStyle : buttonStyle),
+            padding: "4px 16px",
+            fontSize: 13,
+          }}
           onClick={() => props.onPlayingChange(!props.playing)}
         >
-          {props.playing ? "pause" : "play"}
+          {props.playing ? "❚❚ pause" : "▶ play"}
         </button>{" "}
-        {[1, 5, 10].map((mult) => (
+        {[0.5, 1, 5, 10].map((mult) => (
           <button
             key={mult}
             style={props.speedMultiplier === mult ? activeButtonStyle : buttonStyle}
@@ -139,6 +170,12 @@ export function Controls(props: ControlsProps) {
       </div>
 
       <div>
+        <button
+          style={props.ghostEnabled ? activeButtonStyle : buttonStyle}
+          onClick={() => props.onGhostEnabledChange(!props.ghostEnabled)}
+        >
+          ghost μ1.2
+        </button>{" "}
         elevation{" "}
         {[1, 3].map((factor) => (
           <button
@@ -165,12 +202,6 @@ export function Controls(props: ControlsProps) {
           ax {props.hoverInfo.axMps2.toFixed(1)} · ay {props.hoverInfo.ayMps2.toFixed(1)} m/s²
         </div>
       )}
-
-      <div style={{ color: "#50505c", fontSize: 10, marginTop: 4 }}>
-        phase: <span style={{ color: "#2ba22b" }}>accel</span> ·{" "}
-        <span style={{ color: "#d62728" }}>brake</span> ·{" "}
-        <span style={{ color: "#8a8a94" }}>coast</span>
-      </div>
     </div>
   );
 }

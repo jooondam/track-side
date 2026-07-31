@@ -11,9 +11,11 @@ export function TrackMesh({ url }: { url: string }) {
   useEffect(() => {
     gltf.scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
+        // lifted out of near-black so the road separates from the #0a0a0f background at
+        // distance -- the original #2a2a30 vanished once the camera pulled back
         obj.material = new THREE.MeshStandardMaterial({
-          color: "#2a2a30",
-          roughness: 0.9,
+          color: "#3a3a42",
+          roughness: 0.95,
           metalness: 0.0,
           side: THREE.DoubleSide,
         });

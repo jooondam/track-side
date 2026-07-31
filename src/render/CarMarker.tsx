@@ -5,12 +5,27 @@
 // the silhouette is deliberately generic (wide body, cabin wedge, big rear wing): real GT3
 // cars are manufacturers' trademarked designs, and DESIGN_NOTES section 5 keeps marks and
 // likenesses out of the UI entirely, so no downloaded car model.
+//
+// the same component renders the optional ghost car (fixed reference grip): transparent grey
+// materials, no accent stripe, its own velocity profile -- the visual gap between ghost and
+// live car is the grip story told physically.
 
 import { useFrame } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { LineData } from "../assets";
+import { buildLapTimeTable, lowerIndex, sAtTime, timeAtS } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
+
+export interface LapProgress {
+  sM: number;
+  vMps: number;
+  tS: number;
+  lapTimeS: number;
+  // scrub request: id increments on every new request; each marker (live and ghost) applies
+  // a given id exactly once, so frame ordering between the two markers can't drop a scrub
+  scrub: { id: number; s: number } | null;
+}
 
 interface CarMarkerProps {
   line: LineData;
@@ -18,7 +33,9 @@ interface CarMarkerProps {
   playing: boolean;
   speedMultiplier: number;
   exaggeration: number;
-  progressRef: React.MutableRefObject<{ sM: number; vMps: number }>;
+  ghost?: boolean;
+  progressRef?: React.MutableRefObject<LapProgress>;
+  poseRef?: React.MutableRefObject<{ position: THREE.Vector3; direction: THREE.Vector3 }>;
 }
 
 export function CarMarker({
@@ -27,63 +44,43 @@ export function CarMarker({
   playing,
   speedMultiplier,
   exaggeration,
+  ghost = false,
   progressRef,
+  poseRef,
 }: CarMarkerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const sRef = useRef(0);
+  const lastScrubId = useRef(-1);
 
-  // cumulative time to reach each line point under the current profile; rebuilt on each new
-  // solve (cheap: one O(n) pass), lets the frame loop map elapsed time -> arc length exactly
-  const cumTime = useMemo(() => {
-    const n = line.nPoints;
-    const t = new Float64Array(n);
-    for (let i = 1; i < n; i++) {
-      const ds = line.sM[i] - line.sM[i - 1];
-      t[i] = t[i - 1] + (2 * ds) / (result.vMps[i - 1] + result.vMps[i]);
-    }
-    return t;
-  }, [line, result]);
+  const table = useMemo(
+    () => buildLapTimeTable(line.sM, result.vMps),
+    [line, result],
+  );
+
+  // scrub requests apply even while a different result is animating (table changes reset
+  // nothing: sRef survives solver updates so the car doesn't teleport on slider drags).
+  // only the live car owns the shared progress fields -- the ghost must not clobber them.
+  useEffect(() => {
+    if (progressRef && !ghost) progressRef.current.lapTimeS = table.lapTimeS;
+  }, [table, progressRef, ghost]);
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
-    const lapTime = cumTime[cumTime.length - 1];
+
+    const scrub = progressRef?.current.scrub;
+    if (scrub && scrub.id !== lastScrubId.current) {
+      sRef.current = scrub.s; // ghost jumps with the live car so comparisons restart aligned
+      lastScrubId.current = scrub.id;
+    }
 
     if (playing) {
-      // advance in time-domain, wrap by lap
-      const sNow = sRef.current;
-      // current time via binary search on s (monotone), then step forward
-      let lo = 0;
-      let hi = line.nPoints - 1;
-      while (hi - lo > 1) {
-        const mid = (lo + hi) >> 1;
-        if (line.sM[mid] <= sNow) lo = mid;
-        else hi = mid;
-      }
-      const segFrac = (sNow - line.sM[lo]) / Math.max(line.sM[hi] - line.sM[lo], 1e-9);
-      const tNow = cumTime[lo] + segFrac * (cumTime[hi] - cumTime[lo]);
-      let tNext = (tNow + delta * speedMultiplier) % lapTime;
-
-      // time -> s: binary search on cumTime (also monotone)
-      lo = 0;
-      hi = line.nPoints - 1;
-      while (hi - lo > 1) {
-        const mid = (lo + hi) >> 1;
-        if (cumTime[mid] <= tNext) lo = mid;
-        else hi = mid;
-      }
-      const tFrac = (tNext - cumTime[lo]) / Math.max(cumTime[hi] - cumTime[lo], 1e-9);
-      sRef.current = line.sM[lo] + tFrac * (line.sM[hi] - line.sM[lo]);
+      const tNow = timeAtS(table, line.sM, sRef.current);
+      sRef.current = sAtTime(table, line.sM, tNow + delta * speedMultiplier);
     }
 
-    // place + orient at sRef
     const s = sRef.current;
-    let lo = 0;
-    let hi = line.nPoints - 1;
-    while (hi - lo > 1) {
-      const mid = (lo + hi) >> 1;
-      if (line.sM[mid] <= s) lo = mid;
-      else hi = mid;
-    }
+    const lo = lowerIndex(line.sM, s);
+    const hi = Math.min(lo + 1, line.nPoints - 1);
     const f = (s - line.sM[lo]) / Math.max(line.sM[hi] - line.sM[lo], 1e-9);
     const x = line.positionYup[3 * lo] + f * (line.positionYup[3 * hi] - line.positionYup[3 * lo]);
     const y =
@@ -99,40 +96,57 @@ export function CarMarker({
     const dz = line.positionYup[3 * ahead + 2] - z;
     groupRef.current.rotation.y = Math.atan2(-dz, dx) + Math.PI / 2;
 
-    const vNow = result.vMps[lo] + f * (result.vMps[hi] - result.vMps[lo]);
-    progressRef.current.sM = s;
-    progressRef.current.vMps = vNow;
+    if (!ghost && progressRef) {
+      const vNow = result.vMps[lo] + f * (result.vMps[hi] - result.vMps[lo]);
+      progressRef.current.sM = s;
+      progressRef.current.vMps = vNow;
+      progressRef.current.tS = timeAtS(table, line.sM, s);
+    }
+    if (!ghost && poseRef) {
+      poseRef.current.position.set(x, y * exaggeration + 0.4, z);
+      const len = Math.hypot(dx, dz);
+      if (len > 1e-6) poseRef.current.direction.set(dx / len, 0, dz / len);
+    }
   });
+
+  const bodyProps = ghost
+    ? { color: "#8a8a94", transparent: true, opacity: 0.35, roughness: 0.6, metalness: 0.1 }
+    : { color: "#15151c", roughness: 0.4, metalness: 0.6 };
+  const cabinProps = ghost
+    ? { color: "#8a8a94", transparent: true, opacity: 0.3, roughness: 0.6, metalness: 0.1 }
+    : { color: "#101016", roughness: 0.3, metalness: 0.7 };
 
   return (
     <group ref={groupRef} scale={[3, 3, 3]}>
-      {/* body: wide, low box with a slight nose taper via two stacked boxes */}
+      {/* body: wide, low box */}
       <mesh position={[0, 0.35, 0]}>
         <boxGeometry args={[1.9, 0.5, 4.4]} />
-        <meshStandardMaterial color="#15151c" roughness={0.4} metalness={0.6} />
+        <meshStandardMaterial {...bodyProps} />
       </mesh>
       {/* cabin wedge */}
       <mesh position={[0, 0.75, 0.25]}>
         <boxGeometry args={[1.35, 0.42, 1.9]} />
-        <meshStandardMaterial color="#101016" roughness={0.3} metalness={0.7} />
+        <meshStandardMaterial {...cabinProps} />
       </mesh>
-      {/* glowing accent stripe down the centreline */}
-      <mesh position={[0, 0.62, 0]}>
-        <boxGeometry args={[0.12, 0.02, 4.2]} />
-        <meshStandardMaterial color="#00e5ff" emissive="#00e5ff" emissiveIntensity={2.0} />
-      </mesh>
+      {/* glowing accent stripe (live car only) */}
+      {!ghost && (
+        <mesh position={[0, 0.62, 0]}>
+          <boxGeometry args={[0.12, 0.02, 4.2]} />
+          <meshStandardMaterial color="#00e5ff" emissive="#00e5ff" emissiveIntensity={2.0} />
+        </mesh>
+      )}
       {/* rear wing on swan-neck pylons */}
       <mesh position={[0, 0.95, 2.0]}>
         <boxGeometry args={[1.7, 0.06, 0.45]} />
-        <meshStandardMaterial color="#15151c" roughness={0.4} metalness={0.6} />
+        <meshStandardMaterial {...bodyProps} />
       </mesh>
       <mesh position={[-0.5, 0.75, 2.05]}>
         <boxGeometry args={[0.08, 0.35, 0.12]} />
-        <meshStandardMaterial color="#15151c" />
+        <meshStandardMaterial {...bodyProps} />
       </mesh>
       <mesh position={[0.5, 0.75, 2.05]}>
         <boxGeometry args={[0.08, 0.35, 0.12]} />
-        <meshStandardMaterial color="#15151c" />
+        <meshStandardMaterial {...bodyProps} />
       </mesh>
       {/* wheels */}
       {(
@@ -145,7 +159,12 @@ export function CarMarker({
       ).map(([wx, wz], i) => (
         <mesh key={i} position={[wx, 0.32, wz]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.32, 0.32, 0.3, 16]} />
-          <meshStandardMaterial color="#050508" roughness={0.8} />
+          <meshStandardMaterial
+            color="#050508"
+            roughness={0.8}
+            transparent={ghost}
+            opacity={ghost ? 0.35 : 1}
+          />
         </mesh>
       ))}
     </group>

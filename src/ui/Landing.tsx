@@ -64,9 +64,9 @@ export function Landing({ onEnter }: LandingProps) {
         </p>
 
         <div style={{ color: "#9a9aa8", margin: "16px 0" }}>
-          <span style={kbdStyle}>drag</span> orbit · <span style={kbdStyle}>scroll</span> zoom
-          · <span style={kbdStyle}>hover the line</span> speed probe ·{" "}
-          <span style={kbdStyle}>3x</span> exaggerate elevation
+          <span style={kbdStyle}>WASD</span> pan · <span style={kbdStyle}>drag</span> orbit ·{" "}
+          <span style={kbdStyle}>2</span> follow cam · <span style={kbdStyle}>space</span>{" "}
+          pause · drag the speed trace to scrub · <span style={kbdStyle}>?</span> full guide
         </div>
 
         <button

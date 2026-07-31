@@ -1,29 +1,39 @@
-// the r3f scene: dark-telemetry composition of track mesh, racing line, car, labels.
-// elevation exaggeration is applied as a Y scale on the track/line group; the car marker
-// compensates internally so its body doesn't stretch.
+// the r3f scene: dark-telemetry composition of terrain grid, track mesh + outline + kerbs,
+// racing line, braking markers, cars, labels, camera rig. Elevation exaggeration is applied
+// as a Y scale on the track group; car markers and labels compensate internally.
 
-import { Grid, OrbitControls } from "@react-three/drei";
+import { Grid } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useMemo } from "react";
 import { Perf } from "r3f-perf";
+import * as THREE from "three";
 import type { CircuitAssets } from "../assets";
 import type { VelocityProfileResult } from "../solver/velocity";
 import type { TrackDefinition } from "../tracks";
-import { CarMarker } from "./CarMarker";
+import { BrakingMarkers } from "./BrakingMarkers";
+import { CameraRig, type CameraMode } from "./CameraRig";
+import { CarMarker, type LapProgress } from "./CarMarker";
 import { CornerLabels } from "./CornerLabels";
+import { Kerbs } from "./Kerbs";
 import { RacingLine, type ColorMode } from "./RacingLine";
+import { TerrainGrid } from "./TerrainGrid";
 import { TrackMesh } from "./TrackMesh";
+import { TrackOutline } from "./TrackOutline";
 
 interface SceneProps {
   assets: CircuitAssets;
   trackDef: TrackDefinition;
   result: VelocityProfileResult;
+  ghostResult: VelocityProfileResult | null;
   colorMode: ColorMode;
+  cameraMode: CameraMode;
+  onCameraModeChange: (mode: CameraMode) => void;
   playing: boolean;
   speedMultiplier: number;
   exaggeration: number;
   showPerf: boolean;
-  progressRef: React.MutableRefObject<{ sM: number; vMps: number }>;
+  progressRef: React.MutableRefObject<LapProgress>;
+  carPoseRef: React.MutableRefObject<{ position: THREE.Vector3; direction: THREE.Vector3 }>;
   onHoverIndex: (index: number | null) => void;
 }
 
@@ -31,12 +41,16 @@ export function Scene({
   assets,
   trackDef,
   result,
+  ghostResult,
   colorMode,
+  cameraMode,
+  onCameraModeChange,
   playing,
   speedMultiplier,
   exaggeration,
   showPerf,
   progressRef,
+  carPoseRef,
   onHoverIndex,
 }: SceneProps) {
   const { center, extent } = useMemo(() => {
@@ -61,13 +75,15 @@ export function Scene({
     <Canvas
       camera={{
         position: [center[0], extent * 0.55, center[2] + extent * 0.7],
-        far: extent * 6,
+        far: extent * 10,
         near: 1,
       }}
       dpr={[1, 2]}
     >
       <color attach="background" args={["#0a0a0f"]} />
-      <fog attach="fog" args={["#0a0a0f", extent * 1.2, extent * 4]} />
+      {/* fog pushed way out: at extent*1.2 it was swallowing the track colours the moment
+          the camera pulled back -- depth cueing now comes from the terrain grid instead */}
+      <fog attach="fog" args={["#0a0a0f", extent * 3, extent * 8]} />
       <hemisphereLight args={["#3a3a4a", "#0c0c10", 1.1]} />
       <directionalLight position={[center[0] + 600, 900, center[2] - 400]} intensity={1.4} />
 
@@ -81,16 +97,20 @@ export function Scene({
         fadeDistance={extent * 2.2}
         infiniteGrid={false}
       />
+      <TerrainGrid terrain={assets.terrain} exaggeration={exaggeration} />
 
       <Suspense fallback={null}>
         <group scale={[1, exaggeration, 1]}>
           <TrackMesh url={assets.glbUrl} />
+          <TrackOutline trackLines={assets.trackLines} />
+          <Kerbs trackLines={assets.trackLines} />
           <RacingLine
             line={assets.line}
             result={result}
             colorMode={colorMode}
             onHoverIndex={onHoverIndex}
           />
+          <BrakingMarkers line={assets.line} result={result} />
         </group>
         <CarMarker
           line={assets.line}
@@ -99,17 +119,30 @@ export function Scene({
           speedMultiplier={speedMultiplier}
           exaggeration={exaggeration}
           progressRef={progressRef}
+          poseRef={carPoseRef}
         />
+        {ghostResult && (
+          <CarMarker
+            line={assets.line}
+            result={ghostResult}
+            playing={playing}
+            speedMultiplier={speedMultiplier}
+            exaggeration={exaggeration}
+            ghost
+            progressRef={progressRef}
+          />
+        )}
         <CornerLabels line={assets.line} corners={trackDef.corners} exaggeration={exaggeration} />
       </Suspense>
 
-      <OrbitControls
-        target={[center[0], 0, center[2]]}
-        maxPolarAngle={Math.PI * 0.49}
-        minDistance={60}
-        maxDistance={extent * 2.5}
+      <CameraRig
+        mode={cameraMode}
+        onModeChange={onCameraModeChange}
+        center={center}
+        extent={extent}
+        carPoseRef={carPoseRef}
       />
-      {showPerf && <Perf position="bottom-right" />}
+      {showPerf && <Perf position="top-right" />}
     </Canvas>
   );
 }

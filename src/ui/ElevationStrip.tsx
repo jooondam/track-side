@@ -1,17 +1,21 @@
-// mini z(s) sparkline pinned to the bottom edge, cursor synced to the car marker -- ties the
-// 3D view back to the M5 elevation deliverable. Draws in its own rAF loop reading the shared
-// mutable progress ref, so the 60 Hz cursor costs zero React re-renders.
+// mini z(s) sparkline, cursor synced to the car marker -- ties the 3D view back to the M5
+// elevation deliverable. Draws in its own rAF loop reading the shared mutable progress ref,
+// so the 60 Hz cursor costs zero React re-renders. Click/drag scrubs the car, same as the
+// speed trace above it. Positioned by the parent (stacked bottom panel), not self-positioned.
 
 import { useEffect, useRef } from "react";
 import type { LineData } from "../assets";
+import type { LapProgress } from "../render/CarMarker";
 
 interface ElevationStripProps {
   line: LineData;
-  progressRef: React.MutableRefObject<{ sM: number; vMps: number }>;
+  progressRef: React.MutableRefObject<LapProgress>;
+  onScrubStart: () => void;
 }
 
-export function ElevationStrip({ line, progressRef }: ElevationStripProps) {
+export function ElevationStrip({ line, progressRef, onScrubStart }: ElevationStripProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dragging = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -32,7 +36,7 @@ export function ElevationStrip({ line, progressRef }: ElevationStripProps) {
     const loop = line.loopLengthM;
 
     const xAt = (s: number) => (s / loop) * (w - 8) + 4;
-    const yAt = (z: number) => h - 6 - ((z - zMin) / zSpan) * (h - 14);
+    const yAt = (z: number) => h - 6 - ((z - zMin) / zSpan) * (h - 16);
 
     let raf = 0;
     const draw = () => {
@@ -59,28 +63,47 @@ export function ElevationStrip({ line, progressRef }: ElevationStripProps) {
 
       ctx.fillStyle = "#6a6a78";
       ctx.font = "9px monospace";
-      ctx.fillText(`z range ${(zSpan).toFixed(0)} m`, 6, 10);
+      ctx.fillText(`elevation, range ${zSpan.toFixed(0)} m`, 6, 10);
 
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [line, progressRef]);
+
+    const scrub = (clientX: number) => {
+      const rect = canvas.getBoundingClientRect();
+      const frac = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 0.9999);
+      const p = progressRef.current;
+      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: frac * loop };
+    };
+    const down = (e: PointerEvent) => {
+      dragging.current = true;
+      onScrubStart();
+      scrub(e.clientX);
+      canvas.setPointerCapture(e.pointerId);
+    };
+    const move = (e: PointerEvent) => {
+      if (dragging.current) scrub(e.clientX);
+    };
+    const up = () => {
+      dragging.current = false;
+    };
+    canvas.addEventListener("pointerdown", down);
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", up);
+    return () => {
+      cancelAnimationFrame(raf);
+      canvas.removeEventListener("pointerdown", down);
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", up);
+    };
+  }, [line, progressRef, onScrubStart]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={420}
-      height={54}
-      style={{
-        position: "absolute",
-        bottom: 12,
-        left: "50%",
-        transform: "translateX(-50%)",
-        background: "rgba(10, 10, 15, 0.75)",
-        border: "1px solid #22222e",
-        borderRadius: 4,
-      }}
+      width={640}
+      height={44}
+      style={{ display: "block", cursor: "ew-resize" }}
     />
   );
 }
