@@ -1,0 +1,10 @@
+{
+  "mass_kg": 1300.0,
+  "mu": 1.2,
+  "downforce_area_m2": 2.8,
+  "drag_area_m2": 1.35,
+  "power_w": 410000.0,
+  "air_density_kgpm3": 1.225,
+  "g_mps2": 9.81,
+  "v_floor_mps": 2.0
+}
