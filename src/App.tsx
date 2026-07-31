@@ -12,6 +12,7 @@ import { VelocitySolver } from "./solver/velocity";
 import { TRACKS } from "./tracks";
 import { Controls } from "./ui/Controls";
 import { ElevationStrip } from "./ui/ElevationStrip";
+import { Landing } from "./ui/Landing";
 
 export default function App() {
   const [circuitId, setCircuitId] = useState("spa");
@@ -26,6 +27,7 @@ export default function App() {
   const [showPerf, setShowPerf] = useState(false);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [solveMs, setSolveMs] = useState(0);
+  const [showLanding, setShowLanding] = useState(true);
 
   const progressRef = useRef({ sM: 0, vMps: 0 });
 
@@ -113,6 +115,7 @@ export default function App() {
         hoverInfo={hoverInfo}
       />
       <ElevationStrip line={assets.line} progressRef={progressRef} />
+      {showLanding && <Landing onEnter={() => setShowLanding(false)} />}
     </div>
   );
 }
