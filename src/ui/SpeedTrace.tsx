@@ -1,150 +1,265 @@
 // the race-engineer chart: v(s) in km/h, phase-coloured, with the car's live position as a
-// cursor. Hover inspects (shares the same probe as the 3D line); click/drag scrubs the car.
-// Static polyline is drawn to an offscreen canvas only when the result changes; the visible
-// canvas composites polyline + cursor per frame from the shared ref: zero React re-renders.
+// cursor. Hover inspects (sharing the probe readout with the 3D line), drag scrubs, and clicking
+// a corner tick flies the camera to that corner, which is what ties this panel to the viewport
+// instead of leaving it a decorative squiggle.
+//
+// Two canvases: the phase-coloured trace is drawn once per solve into an offscreen buffer, and
+// the visible canvas composites buffer + cursor per frame from the shared ref. Zero React
+// re-renders at 60 Hz.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
+import { useThemeTokens } from "./theme";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 import type { VelocityProfileResult } from "../solver/velocity";
 import { PHASE_ACCEL, PHASE_BRAKE } from "../solver/velocity";
-
-const PHASE_STROKES: Record<number, string> = {
-  [PHASE_ACCEL]: "#2ba22b",
-  [PHASE_BRAKE]: "#d62728",
-};
-const COAST_STROKE = "#71717c";
+import type { CornerLabel } from "../tracks";
 
 interface SpeedTraceProps {
   line: LineData;
   result: VelocityProfileResult;
+  corners: CornerLabel[];
+  width: number;
+  height?: number;
   progressRef: React.MutableRefObject<LapProgress>;
   onHoverIndex: (index: number | null) => void;
   onScrubStart: () => void;
+  onCornerSelect: (corner: CornerLabel) => void;
 }
 
-export function SpeedTrace({ line, result, progressRef, onHoverIndex, onScrubStart }: SpeedTraceProps) {
+export function SpeedTrace({
+  line,
+  result,
+  corners,
+  width,
+  height = 132,
+  progressRef,
+  onHoverIndex,
+  onScrubStart,
+  onCornerSelect,
+}: SpeedTraceProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const staticRef = useRef<HTMLCanvasElement | null>(null);
   const dragging = useRef(false);
+  const hoverX = useRef<number | null>(null);
+  const tokens = useThemeTokens();
 
-  // redraw the static phase-coloured trace only when the solve changes
-  useEffect(() => {
-    const w = 640;
-    const h = 110;
-    if (!staticRef.current) {
-      staticRef.current = document.createElement("canvas");
-      staticRef.current.width = w;
-      staticRef.current.height = h;
-    }
-    const ctx = staticRef.current.getContext("2d");
-    if (!ctx) return;
-
+  // one pass for the axis scale and the accessible description; a spread over 7000 samples would
+  // work but flirts with the argument-count limit for no reason
+  const vMaxKmh = useMemo(() => {
     let vMax = 0;
     for (let i = 0; i < line.nPoints; i++) vMax = Math.max(vMax, result.vMps[i]);
-    const vMaxKmh = vMax * 3.6;
+    return Math.max(vMax * 3.6, 1);
+  }, [line, result]);
 
-    const xAt = (i: number) => (line.sM[i] / line.loopLengthM) * (w - 44) + 40;
-    const yAt = (v: number) => h - 16 - ((v * 3.6) / vMaxKmh) * (h - 30);
+  // the static trace: redrawn only when the solve, the size or the theme changes
+  useEffect(() => {
+    if (!staticRef.current) staticRef.current = document.createElement("canvas");
+    const ctx = prepareCanvas(staticRef.current, width, height);
+    if (!ctx) return;
+    const r = plotRect(width, height);
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = "#22222e";
-    ctx.lineWidth = 0.5;
-    for (const frac of [0.25, 0.5, 0.75, 1.0]) {
-      const y = h - 16 - frac * (h - 30);
+    const xAt = (s: number) => r.left + (s / line.loopLengthM) * r.width;
+    const yAt = (v: number) => r.top + r.height - ((v * 3.6) / vMaxKmh) * r.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // gridlines and axis labels
+    ctx.font = '10px ui-monospace, "SF Mono", Menlo, monospace';
+    ctx.textBaseline = "middle";
+    for (const frac of [0, 0.25, 0.5, 0.75, 1]) {
+      const y = r.top + r.height - frac * r.height;
+      ctx.strokeStyle = tokens.line;
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(40, y);
-      ctx.lineTo(w - 4, y);
+      ctx.moveTo(r.left, y + 0.5);
+      ctx.lineTo(r.left + r.width, y + 0.5);
       ctx.stroke();
-      ctx.fillStyle = "#6a6a78";
-      ctx.font = "9px monospace";
-      ctx.fillText(`${Math.round(frac * vMaxKmh)}`, 4, y + 3);
+      ctx.fillStyle = tokens.textDim;
+      ctx.textAlign = "right";
+      ctx.fillText(`${Math.round(frac * vMaxKmh)}`, r.left - 6, y);
     }
 
-    // phase-coloured segments: stroke path per contiguous phase run
-    ctx.lineWidth = 1.6;
+    // corner ticks along the bottom. Every corner gets a tick; a name is only drawn if it clears
+    // the last one drawn, otherwise consecutive corners (Eau Rouge and Raidillon are 200 m apart
+    // on a 7 km lap) overprint each other into mush.
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    let lastLabelRight = -Infinity;
+    for (const c of corners) {
+      const x = xAt(c.sM);
+      ctx.strokeStyle = tokens.lineStrong;
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, r.top + r.height);
+      ctx.lineTo(x + 0.5, r.top + r.height + 4);
+      ctx.stroke();
+      if (r.width <= 460) continue;
+      ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
+      const short = c.name.length > 14 ? `${c.name.slice(0, 13)}…` : c.name;
+      const half = ctx.measureText(short).width / 2;
+      if (x - half > lastLabelRight + 6) {
+        ctx.fillStyle = tokens.textDim;
+        ctx.fillText(short, x, height - 4);
+        lastLabelRight = x + half;
+      }
+      ctx.font = '10px ui-monospace, "SF Mono", Menlo, monospace';
+    }
+
+    // the trace, stroked as one path per contiguous phase run
+    const strokeFor = (phase: number) =>
+      phase === PHASE_ACCEL
+        ? tokens.phaseAccel
+        : phase === PHASE_BRAKE
+          ? tokens.phaseBrake
+          : tokens.phaseCoast;
+
+    ctx.lineWidth = 1.75;
+    ctx.lineJoin = "round";
     let runStart = 0;
     for (let i = 1; i <= line.nPoints; i++) {
       const ended = i === line.nPoints || result.phase[i] !== result.phase[runStart];
       if (!ended) continue;
-      ctx.strokeStyle = PHASE_STROKES[result.phase[runStart]] ?? COAST_STROKE;
+      ctx.strokeStyle = strokeFor(result.phase[runStart]);
       ctx.beginPath();
-      for (let j = Math.max(runStart - 1, 0); j < i; j++) {
-        const x = xAt(j);
+      // start one sample early so consecutive runs share an edge and the line has no gaps
+      const from = Math.max(runStart - 1, 0);
+      for (let j = from; j < i; j++) {
+        const x = xAt(line.sM[j]);
         const y = yAt(result.vMps[j]);
-        if (j === Math.max(runStart - 1, 0)) ctx.moveTo(x, y);
+        if (j === from) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
       runStart = i;
     }
-    ctx.fillStyle = "#6a6a78";
-    ctx.font = "9px monospace";
-    ctx.fillText("v(s) km/h", w - 64, 10);
-  }, [line, result]);
 
-  // per-frame compositor: static trace + car cursor
+    ctx.fillStyle = tokens.textDim;
+    ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = "left";
+    ctx.fillText("speed  km/h", r.left, 10);
+  }, [line, result, corners, width, height, tokens, vMaxKmh]);
+
+  // the compositor: static trace + car cursor + hover crosshair
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = prepareCanvas(canvas, width, height);
     if (!ctx) return;
-    const w = canvas.width;
-    const h = canvas.height;
+    const r = plotRect(width, height);
+
+    const indexAtFrac = (f: number) =>
+      Math.min(Math.round(f * (line.nPoints - 1)), line.nPoints - 1);
 
     let raf = 0;
     const draw = () => {
-      ctx.clearRect(0, 0, w, h);
-      if (staticRef.current) ctx.drawImage(staticRef.current, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      if (staticRef.current) {
+        ctx.drawImage(staticRef.current, 0, 0, width, height);
+      }
+
+      if (hoverX.current !== null) {
+        const x = r.left + hoverX.current * r.width;
+        ctx.strokeStyle = tokens.lineStrong;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, r.top);
+        ctx.lineTo(x + 0.5, r.top + r.height);
+        ctx.stroke();
+      }
+
       const frac = progressRef.current.sM / line.loopLengthM;
-      const x = frac * (w - 44) + 40;
-      ctx.strokeStyle = "#00e5ff";
-      ctx.lineWidth = 1.2;
+      const x = r.left + Math.min(Math.max(frac, 0), 1) * r.width;
+      ctx.strokeStyle = tokens.accent;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(x, 4);
-      ctx.lineTo(x, h - 14);
+      ctx.moveTo(x + 0.5, r.top - 4);
+      ctx.lineTo(x + 0.5, r.top + r.height + 2);
       ctx.stroke();
+      ctx.fillStyle = tokens.accent;
+      ctx.beginPath();
+      ctx.moveTo(x, r.top - 5);
+      ctx.lineTo(x - 3.5, r.top - 10);
+      ctx.lineTo(x + 3.5, r.top - 10);
+      ctx.closePath();
+      ctx.fill();
+
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
 
-    const indexAt = (clientX: number) => {
-      const rect = canvas.getBoundingClientRect();
-      const frac = Math.min(Math.max((clientX - rect.left - 40 * (rect.width / w)) / ((rect.width * (w - 44)) / w), 0), 1);
-      // sM is uniform enough that a proportional index is exact to +/-1
-      return Math.min(Math.round(frac * (line.nPoints - 1)), line.nPoints - 1);
-    };
-    const scrub = (clientX: number) => {
-      const i = indexAt(clientX);
+    const scrubTo = (f: number) => {
       const p = progressRef.current;
-      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: line.sM[i] };
+      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: line.sM[indexAtFrac(f)] };
     };
+
+    const nearestCorner = (f: number): CornerLabel | null => {
+      const s = f * line.loopLengthM;
+      const tolM = (14 / Math.max(r.width, 1)) * line.loopLengthM;
+      let best: CornerLabel | null = null;
+      let bestD = tolM;
+      for (const c of corners) {
+        const d = Math.abs(c.sM - s);
+        if (d < bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      return best;
+    };
+
     const down = (e: PointerEvent) => {
+      const f = fracAtClientX(canvas, e.clientX, r);
+      // clicking a corner tick along the bottom gutter jumps the camera instead of scrubbing
+      const box = canvas.getBoundingClientRect();
+      if (e.clientY - box.top > r.top + r.height) {
+        const c = nearestCorner(f);
+        if (c) {
+          onCornerSelect(c);
+          return;
+        }
+      }
       dragging.current = true;
       onScrubStart();
-      scrub(e.clientX);
+      scrubTo(f);
       canvas.setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
-      onHoverIndex(indexAt(e.clientX));
-      if (dragging.current) scrub(e.clientX);
+      const f = fracAtClientX(canvas, e.clientX, r);
+      hoverX.current = f;
+      onHoverIndex(indexAtFrac(f));
+      if (dragging.current) scrubTo(f);
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
       dragging.current = false;
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     };
-    const out = () => onHoverIndex(null);
+    const out = () => {
+      hoverX.current = null;
+      onHoverIndex(null);
+    };
+
     canvas.addEventListener("pointerdown", down);
     canvas.addEventListener("pointermove", move);
     canvas.addEventListener("pointerup", up);
-    canvas.addEventListener("pointerout", out);
+    canvas.addEventListener("pointerleave", out);
     return () => {
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", down);
       canvas.removeEventListener("pointermove", move);
       canvas.removeEventListener("pointerup", up);
-      canvas.removeEventListener("pointerout", out);
+      canvas.removeEventListener("pointerleave", out);
     };
-  }, [line, progressRef, onHoverIndex, onScrubStart]);
+  }, [line, corners, width, height, tokens, progressRef, onHoverIndex, onScrubStart, onCornerSelect]);
 
-  return <canvas ref={canvasRef} width={640} height={110} style={{ display: "block" }} />;
+  return (
+    <canvas
+      ref={canvasRef}
+      role="img"
+      aria-label={`Speed against distance around the lap, peaking at ${Math.round(
+        vMaxKmh,
+      )} kilometres per hour.`}
+      style={{ display: "block", cursor: "ew-resize", touchAction: "none" }}
+    />
+  );
 }

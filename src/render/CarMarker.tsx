@@ -1,14 +1,18 @@
-// animated car marker: a procedural low-poly GT3 silhouette driving the racing line at the
-// *solved* v(s): it crawls through hairpins and flies down straights because its position
-// comes from integrating the actual velocity profile, not a constant parameter speed.
+// the car, driving the racing line at the *solved* v(s): it crawls through hairpins and flies
+// down straights because its position comes from integrating the actual velocity profile, not a
+// constant parameter speed.
 //
-// the silhouette is deliberately generic (wide body, cabin wedge, big rear wing): real GT3
-// cars are manufacturers' trademarked designs, and DESIGN_NOTES section 5 keeps marks and
-// likenesses out of the UI entirely, so no downloaded car model.
+// The silhouette is a generic GT3, built procedurally: real GT3 cars are manufacturers'
+// trademarked designs, and DESIGN_NOTES section 5 keeps marks and likenesses out of the UI, so
+// there is no downloaded model. Everything here is lathed, extruded or boxed from measurements
+// that are roughly GT3-shaped: 4.6 m long, 2.0 m wide, 1.2 m tall.
 //
-// the same component renders the optional ghost car (fixed reference grip): transparent grey
-// materials, no accent stripe, its own velocity profile: the visual gap between ghost and
-// live car is the grip story told physically.
+// Local frame: nose at -z, tail at +z, roof at +y. The group yaw puts -z on the travel
+// direction.
+//
+// The same component renders the optional ghost car (fixed reference grip): translucent neutral
+// materials, no livery or lights, its own velocity profile. The visual gap between ghost and live
+// car is the grip story told physically.
 
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
@@ -16,6 +20,8 @@ import * as THREE from "three";
 import type { LineData } from "../assets";
 import { buildLapTimeTable, lowerIndex, sAtTime, timeAtS } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
+import { PHASE_BRAKE } from "../solver/velocity";
+import { MATERIAL, useThemeTokens } from "../ui/theme";
 
 export interface LapProgress {
   sM: number;
@@ -38,6 +44,17 @@ interface CarMarkerProps {
   poseRef?: React.MutableRefObject<{ position: THREE.Vector3; direction: THREE.Vector3 }>;
 }
 
+// A real-size car on a 7 km circuit is roughly one pixel from the overview camera, so the model
+// is scaled by viewing distance and clamped: life size in the chase shots, up to 16x when the
+// whole circuit is in frame. Combined with the ground beacon below, this is what makes "where is
+// the car" answerable at every zoom level instead of only up close. SCALE_MIN must stay 1: at 3x
+// the car was longer than the chase camera's standoff distance and filled the entire frame.
+const SCALE_MIN = 1;
+const SCALE_MAX = 16;
+const SCALE_PER_METRE = 0.0055;
+const MAX_ROLL_RAD = 0.075;
+const BEACON_OUTER = 4.6; // local ring radius, before the distance compensation below
+
 export function CarMarker({
   line,
   result,
@@ -49,13 +66,15 @@ export function CarMarker({
   poseRef,
 }: CarMarkerProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.Group>(null);
+  const beaconRef = useRef<THREE.Mesh>(null);
+  const discRef = useRef<THREE.MeshStandardMaterial>(null);
   const sRef = useRef(0);
   const lastScrubId = useRef(-1);
+  const rollRef = useRef(0);
+  const tokens = useThemeTokens();
 
-  const table = useMemo(
-    () => buildLapTimeTable(line.sM, result.vMps),
-    [line, result],
-  );
+  const table = useMemo(() => buildLapTimeTable(line.sM, result.vMps), [line, result]);
 
   // scrub requests apply even while a different result is animating (table changes reset
   // nothing: sRef survives solver updates so the car doesn't teleport on slider drags).
@@ -64,7 +83,7 @@ export function CarMarker({
     if (progressRef && !ghost) progressRef.current.lapTimeS = table.lapTimeS;
   }, [table, progressRef, ghost]);
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
     if (!groupRef.current) return;
 
     const scrub = progressRef?.current.scrub;
@@ -75,7 +94,7 @@ export function CarMarker({
 
     if (playing) {
       const tNow = timeAtS(table, line.sM, sRef.current);
-      sRef.current = sAtTime(table, line.sM, tNow + delta * speedMultiplier);
+      sRef.current = sAtTime(table, line.sM, tNow + Math.min(delta, 0.1) * speedMultiplier);
     }
 
     const s = sRef.current;
@@ -84,19 +103,50 @@ export function CarMarker({
     const f = (s - line.sM[lo]) / Math.max(line.sM[hi] - line.sM[lo], 1e-9);
     const x = line.positionYup[3 * lo] + f * (line.positionYup[3 * hi] - line.positionYup[3 * lo]);
     const y =
-      line.positionYup[3 * lo + 1] + f * (line.positionYup[3 * hi + 1] - line.positionYup[3 * lo + 1]);
+      line.positionYup[3 * lo + 1] +
+      f * (line.positionYup[3 * hi + 1] - line.positionYup[3 * lo + 1]);
     const z =
-      line.positionYup[3 * lo + 2] + f * (line.positionYup[3 * hi + 2] - line.positionYup[3 * lo + 2]);
+      line.positionYup[3 * lo + 2] +
+      f * (line.positionYup[3 * hi + 2] - line.positionYup[3 * lo + 2]);
     groupRef.current.position.set(x, y * exaggeration + 0.4, z);
 
-    // yaw from the ground-plane tangent (pitch skipped: at 3x exaggeration a pitched car
-    // reads as broken rather than informative). The -PI/2 puts the model's nose (local -z)
-    // on the travel direction; +PI/2 had the car driving tail-first, invisible with the old
-    // near-symmetric box model but obvious with a real nose and wing.
+    // keep the car legible at any zoom
+    const dist = camera.position.distanceTo(groupRef.current.position);
+    const scale = THREE.MathUtils.clamp(dist * SCALE_PER_METRE, SCALE_MIN, SCALE_MAX);
+    groupRef.current.scale.setScalar(scale);
+    // the beacon fades in only once the car itself has stopped being readable. Its scale has to
+    // undo the car scaling above, or it inherits it and balloons to a couple of hundred metres
+    // across: the ring is sized in real metres on the ground, not in car-lengths.
+    if (beaconRef.current) {
+      const t = THREE.MathUtils.clamp((dist - 900) / 1600, 0, 1);
+      beaconRef.current.visible = !ghost && t > 0.01;
+      const outerM = 26 + t * 34;
+      beaconRef.current.scale.setScalar(outerM / (BEACON_OUTER * scale));
+      (beaconRef.current.material as THREE.MeshBasicMaterial).opacity = t * 0.5;
+    }
+
+    // yaw from the ground-plane tangent (pitch is skipped: at 3x elevation exaggeration a pitched
+    // car reads as broken rather than informative). The -PI/2 puts the model's nose (local -z) on
+    // the travel direction.
     const ahead = (hi + 4) % (line.nPoints - 1);
     const dx = line.positionYup[3 * ahead] - x;
     const dz = line.positionYup[3 * ahead + 2] - z;
     groupRef.current.rotation.y = Math.atan2(-dz, dx) - Math.PI / 2;
+
+    // body roll from the solved lateral acceleration. Unlike pitch this is a real signal: it
+    // leans out of the corner exactly where the friction circle is loaded.
+    const ay = result.ayMps2[lo] + f * (result.ayMps2[hi] - result.ayMps2[lo]);
+    const targetRoll = THREE.MathUtils.clamp(ay / 22, -1, 1) * MAX_ROLL_RAD;
+    rollRef.current += (targetRoll - rollRef.current) * Math.min(delta * 6, 1);
+    if (bodyRef.current) bodyRef.current.rotation.z = rollRef.current;
+
+    // brake discs glow where the solver says the car is braking
+    if (discRef.current && !ghost) {
+      const braking = result.phase[lo] === PHASE_BRAKE;
+      const target = braking ? 2.4 : 0;
+      discRef.current.emissiveIntensity +=
+        (target - discRef.current.emissiveIntensity) * Math.min(delta * 8, 1);
+    }
 
     if (!ghost && progressRef) {
       const vNow = result.vMps[lo] + f * (result.vMps[hi] - result.vMps[lo]);
@@ -111,135 +161,259 @@ export function CarMarker({
     }
   });
 
-  // the body is an extruded 2D side profile (nose, rising hood, raked windshield, roof,
-  // fastback tail): dramatically more car-shaped than stacked boxes, still zero assets.
-  // shape x axis = car length with the nose at +x; rotation.y = PI/2 maps shape +x to world
-  // -z, which is this marker's direction of travel, and the extrusion (local +z, the car's
-  // width) onto world +x.
-  const bodyGeometry = useMemo(() => {
-    const profile = new THREE.Shape();
-    profile.moveTo(2.2, 0.1); // front floor
-    profile.lineTo(2.28, 0.24); // splitter lip
-    profile.lineTo(2.18, 0.44); // nose
-    profile.lineTo(1.15, 0.6); // hood
-    profile.lineTo(0.55, 0.64); // windshield base
-    profile.lineTo(0.02, 1.06); // roof front
-    profile.lineTo(-0.78, 1.02); // roof rear
-    profile.lineTo(-1.6, 0.7); // rear window to deck
-    profile.lineTo(-2.12, 0.68); // deck
-    profile.lineTo(-2.2, 0.42); // tail cut
-    profile.lineTo(-2.14, 0.1); // rear floor
-    profile.closePath();
-    const geo = new THREE.ExtrudeGeometry(profile, {
-      depth: 1.66,
-      bevelEnabled: true,
-      bevelThickness: 0.09,
-      bevelSize: 0.09,
-      bevelSegments: 2,
-    });
-    return geo;
-  }, []);
+  const g = useCarGeometry();
 
+  // ghost: one neutral translucent material for everything, so it reads as a reference shape
+  // rather than a second car competing for attention
+  const ghostMat = { color: MATERIAL.ghost, transparent: true, opacity: 0.28, roughness: 0.65 } as const;
   const paint = ghost
-    ? { color: "#8a8a94", transparent: true, opacity: 0.3, roughness: 0.6, metalness: 0.1 }
-    : { color: "#ff6a00", roughness: 0.35, metalness: 0.25, emissive: "#992e00", emissiveIntensity: 0.25 };
+    ? ghostMat
+    : ({ color: tokens.carBody, roughness: 0.32, metalness: 0.2 } as const);
   const carbon = ghost
-    ? { color: "#8a8a94", transparent: true, opacity: 0.3, roughness: 0.6, metalness: 0.1 }
-    : { color: "#111116", roughness: 0.5, metalness: 0.4 };
+    ? ghostMat
+    : ({ color: tokens.carCarbon, roughness: 0.55, metalness: 0.35 } as const);
   const glass = ghost
-    ? { color: "#8a8a94", transparent: true, opacity: 0.25, roughness: 0.6, metalness: 0.1 }
-    : { color: "#0c1218", roughness: 0.15, metalness: 0.8 };
+    ? ghostMat
+    : ({ color: tokens.carGlass, roughness: 0.12, metalness: 0.85 } as const);
 
   return (
-    <group ref={groupRef} scale={[3, 3, 3]}>
-      {/* painted body shell */}
-      <mesh geometry={bodyGeometry} rotation={[0, Math.PI / 2, 0]} position={[-0.92, 0, 0]}>
-        <meshStandardMaterial {...paint} />
+    <group ref={groupRef}>
+      {/* ground beacon: a flat ring under the car, faded in by distance so it is invisible in
+          the chase shots and unmissable when the whole circuit is in frame */}
+      <mesh ref={beaconRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} visible={false}>
+        <ringGeometry args={[4.05, BEACON_OUTER, 40]} />
+        <meshBasicMaterial
+          color={tokens.accent}
+          transparent
+          opacity={0}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
       </mesh>
-      {/* greenhouse: a hair wider than the shell so it reads as wraparound glazing */}
-      <mesh position={[0, 0.82, 0.35]}>
-        <boxGeometry args={[1.9, 0.32, 1.5]} />
-        <meshStandardMaterial {...glass} />
-      </mesh>
-      {/* front splitter */}
-      <mesh position={[0, 0.12, -2.1]}>
-        <boxGeometry args={[2.0, 0.05, 0.55]} />
-        <meshStandardMaterial {...carbon} />
-      </mesh>
-      {/* rear diffuser hint */}
-      <mesh position={[0, 0.14, 2.05]}>
-        <boxGeometry args={[1.9, 0.08, 0.4]} />
-        <meshStandardMaterial {...carbon} />
-      </mesh>
-      {/* rear wing + endplates on swan-neck pylons */}
-      <mesh position={[0, 1.06, 2.0]}>
-        <boxGeometry args={[1.8, 0.05, 0.5]} />
-        <meshStandardMaterial {...carbon} />
-      </mesh>
-      <mesh position={[-0.88, 1.02, 2.0]}>
-        <boxGeometry args={[0.04, 0.3, 0.55]} />
-        <meshStandardMaterial {...carbon} />
-      </mesh>
-      <mesh position={[0.88, 1.02, 2.0]}>
-        <boxGeometry args={[0.04, 0.3, 0.55]} />
-        <meshStandardMaterial {...carbon} />
-      </mesh>
-      <mesh position={[-0.45, 0.85, 1.95]}>
-        <boxGeometry args={[0.07, 0.4, 0.14]} />
-        <meshStandardMaterial {...carbon} />
-      </mesh>
-      <mesh position={[0.45, 0.85, 1.95]}>
-        <boxGeometry args={[0.07, 0.4, 0.14]} />
-        <meshStandardMaterial {...carbon} />
-      </mesh>
-      {/* headlights and taillight bar */}
-      {!ghost && (
-        <>
-          <mesh position={[-0.62, 0.46, -2.14]}>
-            <boxGeometry args={[0.42, 0.1, 0.08]} />
-            <meshStandardMaterial color="#eef4ff" emissive="#cfe4ff" emissiveIntensity={2.2} />
+
+      <group ref={bodyRef}>
+        {/* main shell: extruded side profile, wide-body proportions */}
+        <mesh geometry={g.shell} castShadow>
+          <meshStandardMaterial {...paint} />
+        </mesh>
+
+        {/* wheel arch flares. The torus is built in its local XY plane, so it has to be
+            rotated about Y to stand up over a wheel on the x axis: rotating about Z instead
+            laid it flat against the flank, which is the black arc that used to hang off the
+            side of the car. */}
+        {g.archPositions.map((p, i) => (
+          <mesh key={i} geometry={g.arch} position={p} rotation={[0, Math.PI / 2, 0]}>
+            <meshStandardMaterial {...paint} />
           </mesh>
-          <mesh position={[0.62, 0.46, -2.14]}>
-            <boxGeometry args={[0.42, 0.1, 0.08]} />
-            <meshStandardMaterial color="#eef4ff" emissive="#cfe4ff" emissiveIntensity={2.2} />
+        ))}
+
+        {/* greenhouse: cabin glazing, narrower than the body so the roofline reads */}
+        <mesh geometry={g.greenhouse} position={[0, 0.9, 0.1]}>
+          <meshStandardMaterial {...glass} />
+        </mesh>
+        {/* roof scoop */}
+        <mesh position={[0, 1.2, 0.2]}>
+          <boxGeometry args={[0.34, 0.1, 0.8]} />
+          <meshStandardMaterial {...carbon} />
+        </mesh>
+
+        {/* splitter with dive planes */}
+        <mesh position={[0, 0.11, -2.24]}>
+          <boxGeometry args={[2.02, 0.05, 0.62]} />
+          <meshStandardMaterial {...carbon} />
+        </mesh>
+        {[-0.86, 0.86].map((sx) => (
+          <mesh key={sx} position={[sx, 0.3, -2.0]} rotation={[0.22, 0, 0]}>
+            <boxGeometry args={[0.24, 0.02, 0.34]} />
+            <meshStandardMaterial {...carbon} />
           </mesh>
-          <mesh position={[0, 0.58, 2.16]}>
-            <boxGeometry args={[1.5, 0.07, 0.05]} />
-            <meshStandardMaterial color="#ff2020" emissive="#ff2020" emissiveIntensity={2.0} />
+        ))}
+
+        {/* side skirts */}
+        {[-0.92, 0.92].map((sx) => (
+          <mesh key={sx} position={[sx, 0.2, 0]}>
+            <boxGeometry args={[0.09, 0.14, 2.5]} />
+            <meshStandardMaterial {...carbon} />
           </mesh>
-        </>
-      )}
-      {/* wheels: tire + bright rim disc so the wheels read at distance */}
-      {(
-        [
-          [-0.86, 1.42],
-          [0.86, 1.42],
-          [-0.86, -1.42],
-          [0.86, -1.42],
-        ] as const
-      ).map(([wx, wz], i) => (
-        <group key={i} position={[wx, 0.34, wz]} rotation={[0, 0, Math.PI / 2]}>
-          <mesh>
-            <cylinderGeometry args={[0.34, 0.34, 0.3, 20]} />
+        ))}
+
+        {/* mirrors on stalks */}
+        {[-0.96, 0.96].map((sx) => (
+          <group key={sx} position={[sx, 0.78, -0.6]}>
+            <mesh>
+              <boxGeometry args={[0.26, 0.03, 0.04]} />
+              <meshStandardMaterial {...carbon} />
+            </mesh>
+            <mesh position={[sx > 0 ? 0.15 : -0.15, 0.04, 0]}>
+              <boxGeometry args={[0.1, 0.12, 0.16]} />
+              <meshStandardMaterial {...paint} />
+            </mesh>
+          </group>
+        ))}
+
+        {/* rear diffuser */}
+        <mesh position={[0, 0.16, 2.1]} rotation={[-0.2, 0, 0]}>
+          <boxGeometry args={[1.86, 0.06, 0.46]} />
+          <meshStandardMaterial {...carbon} />
+        </mesh>
+
+        {/* swan-neck rear wing: plane, endplates, and the two pylons that hang it from above */}
+        <mesh position={[0, 1.22, 2.02]} rotation={[0.14, 0, 0]}>
+          <boxGeometry args={[1.84, 0.04, 0.42]} />
+          <meshStandardMaterial {...carbon} />
+        </mesh>
+        {[-0.92, 0.92].map((sx) => (
+          <mesh key={sx} position={[sx, 1.16, 2.02]}>
+            <boxGeometry args={[0.03, 0.34, 0.56]} />
+            <meshStandardMaterial {...carbon} />
+          </mesh>
+        ))}
+        {[-0.42, 0.42].map((sx) => (
+          <mesh key={sx} position={[sx, 1.09, 1.9]}>
+            <boxGeometry args={[0.05, 0.3, 0.1]} />
+            <meshStandardMaterial {...carbon} />
+          </mesh>
+        ))}
+
+        {!ghost && (
+          <>
+            {/* livery: a single stripe over the spine plus a number roundel on each door */}
+            <mesh position={[0, 1.02, -0.3]}>
+              <boxGeometry args={[0.22, 0.02, 2.2]} />
+              <meshStandardMaterial color={tokens.accentContrast} roughness={0.4} />
+            </mesh>
+            {[-0.94, 0.94].map((sx) => (
+              <mesh key={sx} position={[sx, 0.62, 0.1]} rotation={[0, Math.PI / 2, 0]}>
+                <circleGeometry args={[0.26, 20]} />
+                <meshStandardMaterial
+                  color={tokens.accentContrast}
+                  roughness={0.5}
+                  side={THREE.DoubleSide}
+                />
+              </mesh>
+            ))}
+
+            {/* headlights and a full-width taillight bar */}
+            {[-0.64, 0.64].map((sx) => (
+              <mesh key={sx} position={[sx, 0.5, -2.2]}>
+                <boxGeometry args={[0.44, 0.12, 0.06]} />
+                <meshStandardMaterial
+                  color={MATERIAL.headlight}
+                  emissive={MATERIAL.headlightEmissive}
+                  emissiveIntensity={2.4}
+                />
+              </mesh>
+            ))}
+            <mesh position={[0, 0.66, 2.2]}>
+              <boxGeometry args={[1.5, 0.07, 0.04]} />
+              <meshStandardMaterial color={tokens.neg} emissive={tokens.neg} emissiveIntensity={1.8} />
+            </mesh>
+          </>
+        )}
+      </group>
+
+      {/* wheels stay outside the rolling group: a real car's tyres keep contact with the road */}
+      {g.wheelPositions.map(([wx, wz], i) => (
+        <group key={i} position={[wx, 0.36, wz]} rotation={[0, 0, Math.PI / 2]}>
+          <mesh geometry={g.tyre}>
             <meshStandardMaterial
-              color="#050508"
-              roughness={0.85}
+              color={MATERIAL.tyre}
+              roughness={0.9}
               transparent={ghost}
-              opacity={ghost ? 0.3 : 1}
+              opacity={ghost ? 0.28 : 1}
             />
           </mesh>
-          <mesh position={[0, wx > 0 ? 0.16 : -0.16, 0]}>
-            <cylinderGeometry args={[0.2, 0.2, 0.02, 12]} />
+          <mesh position={[0, wx > 0 ? 0.13 : -0.13, 0]}>
+            <cylinderGeometry args={[0.23, 0.23, 0.03, 16]} />
             <meshStandardMaterial
-              color="#b8b8c2"
-              roughness={0.3}
-              metalness={0.8}
+              color={MATERIAL.rim}
+              roughness={0.25}
+              metalness={0.85}
               transparent={ghost}
-              opacity={ghost ? 0.3 : 1}
+              opacity={ghost ? 0.28 : 1}
+            />
+          </mesh>
+          {/* brake disc: emissive is driven per frame from the solved phase */}
+          <mesh position={[0, wx > 0 ? 0.05 : -0.05, 0]}>
+            <cylinderGeometry args={[0.19, 0.19, 0.035, 16]} />
+            <meshStandardMaterial
+              ref={i === 0 ? discRef : undefined}
+              color={MATERIAL.brakeDisc}
+              roughness={0.4}
+              metalness={0.6}
+              emissive={MATERIAL.brakeGlow}
+              emissiveIntensity={0}
+              transparent={ghost}
+              opacity={ghost ? 0.28 : 1}
             />
           </mesh>
         </group>
       ))}
     </group>
   );
+}
+
+/**
+ * The geometry is built once per module, not per car: the live car and the ghost share it, and
+ * nothing here depends on props. Extruding along the car's width means the 2D profile below is
+ * literally the side view, which makes the proportions easy to reason about.
+ */
+function useCarGeometry() {
+  return useMemo(() => {
+    // side profile, x = length with the nose at +x, y = height
+    const profile = new THREE.Shape();
+    profile.moveTo(2.24, 0.12);
+    profile.lineTo(2.3, 0.3); // splitter lip
+    profile.lineTo(2.16, 0.52); // nose
+    profile.lineTo(1.5, 0.62); // bonnet
+    profile.lineTo(0.62, 0.7); // windscreen base
+    profile.lineTo(0.12, 1.12); // roof leading edge
+    profile.lineTo(-0.82, 1.1); // roof trailing edge
+    profile.lineTo(-1.72, 0.76); // fastback
+    profile.lineTo(-2.16, 0.72); // rear deck
+    profile.lineTo(-2.26, 0.44); // tail
+    profile.lineTo(-2.2, 0.12);
+    profile.closePath();
+
+    // 1.72 wide plus a 0.1 bevel puts the flank at 0.96; the wheels below sit at 0.9 with a
+    // 0.16 half-width, so the tyres stand 0.1 proud. At the previous 1.9 they were entirely
+    // inside the bodywork and the car had no visible wheels at all.
+    const shell = new THREE.ExtrudeGeometry(profile, {
+      depth: 1.72,
+      bevelEnabled: true,
+      bevelThickness: 0.1,
+      bevelSize: 0.1,
+      bevelSegments: 3,
+      curveSegments: 8,
+    });
+    // Extrude runs along +z from 0. rotateY(PI/2) maps (x, y, z) -> (z, y, -x), so the profile's
+    // length ends up on world z with the nose at -z, and the extrusion depth (the car's width)
+    // ends up on world x spanning 0..1.9. That is the axis that needs centring: translating z
+    // instead shifted the whole body 0.95 m along its own length and left it hanging off its
+    // wheels, which is why it read as a slab rather than a car.
+    shell.rotateY(Math.PI / 2);
+    shell.translate(-0.86, 0, 0);
+    shell.computeVertexNormals();
+
+    // wheel arch: a half torus, flattened, sitting proud of the bodywork
+    const arch = new THREE.TorusGeometry(0.46, 0.1, 6, 14, Math.PI);
+    arch.scale(1, 1, 0.5);
+
+    const greenhouse = new THREE.BoxGeometry(1.5, 0.32, 1.46);
+    const tyre = new THREE.CylinderGeometry(0.36, 0.36, 0.32, 24);
+
+    const wheelPositions: [number, number][] = [
+      [-0.9, -1.45],
+      [0.9, -1.45],
+      [-0.9, 1.45],
+      [0.9, 1.45],
+    ];
+    const archPositions: [number, number, number][] = wheelPositions.map(([wx, wz]) => [
+      wx > 0 ? 0.9 : -0.9,
+      0.36,
+      wz,
+    ]);
+
+    return { shell, arch, greenhouse, tyre, wheelPositions, archPositions };
+  }, []);
 }

@@ -6,6 +6,7 @@ import { Line } from "@react-three/drei";
 import { useMemo } from "react";
 import * as THREE from "three";
 import type { TrackLines } from "../assets";
+import { useThemeTokens } from "../ui/theme";
 
 const EDGE_LIFT = 0.15; // just above the ribbon, below the racing line's 0.4
 
@@ -18,6 +19,7 @@ function toPoints(flat: Float32Array, lift: number): [number, number, number][] 
 }
 
 function StartFinishStrip({ trackLines }: { trackLines: TrackLines }) {
+  const tokens = useThemeTokens();
   // checkered strip spanning the road width at s=0, built from the first boundary
   // cross-section; two rows of alternating quads
   const mesh = useMemo(() => {
@@ -70,23 +72,24 @@ function StartFinishStrip({ trackLines }: { trackLines: TrackLines }) {
   return (
     <>
       <mesh geometry={mesh.white}>
-        <meshBasicMaterial color="#e8e8ee" side={THREE.DoubleSide} />
+        <meshBasicMaterial color={tokens.edge} side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={mesh.black}>
-        <meshBasicMaterial color="#111116" side={THREE.DoubleSide} />
+        <meshBasicMaterial color={tokens.carCarbon} side={THREE.DoubleSide} />
       </mesh>
     </>
   );
 }
 
 export function TrackOutline({ trackLines }: { trackLines: TrackLines }) {
+  const tokens = useThemeTokens();
   const left = useMemo(() => toPoints(trackLines.boundaryLeft, EDGE_LIFT), [trackLines]);
   const right = useMemo(() => toPoints(trackLines.boundaryRight, EDGE_LIFT), [trackLines]);
 
   return (
     <>
-      <Line points={left} color="#c8c8d0" lineWidth={1.5} />
-      <Line points={right} color="#c8c8d0" lineWidth={1.5} />
+      <Line points={left} color={tokens.edge} lineWidth={1.6} />
+      <Line points={right} color={tokens.edge} lineWidth={1.6} />
       <StartFinishStrip trackLines={trackLines} />
     </>
   );

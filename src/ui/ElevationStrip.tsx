@@ -1,79 +1,104 @@
-// mini z(s) sparkline, cursor synced to the car marker: ties the 3D view back to the M5
-// elevation deliverable. Draws in its own rAF loop reading the shared mutable progress ref,
-// so the 60 Hz cursor costs zero React re-renders. Click/drag scrubs the car, same as the
-// speed trace above it. Positioned by the parent (stacked bottom panel), not self-positioned.
+// z(s) as a filled area, cursor synced to the car. Ties the 3D view back to the M5 elevation
+// deliverable: the fill uses the same low-to-high ramp as the terrain dot field, so the chart and
+// the landscape describe the same thing in the same colours.
+//
+// Draws in its own rAF loop reading the shared mutable progress ref, so the 60 Hz cursor costs
+// zero React re-renders. Click and drag scrubs, same as the speed trace above it.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
+import { useThemeTokens } from "./theme";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 
 interface ElevationStripProps {
   line: LineData;
+  width: number;
+  height?: number;
   progressRef: React.MutableRefObject<LapProgress>;
   onScrubStart: () => void;
 }
 
-export function ElevationStrip({ line, progressRef, onScrubStart }: ElevationStripProps) {
+const PAD = { l: 46, r: 10, t: 14, b: 10 };
+
+export function ElevationStrip({
+  line,
+  width,
+  height = 64,
+  progressRef,
+  onScrubStart,
+}: ElevationStripProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragging = useRef(false);
+  const tokens = useThemeTokens();
+
+  const { zMin, zSpan } = useMemo(() => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < line.nPoints; i++) {
+      const z = line.positionYup[3 * i + 1];
+      lo = Math.min(lo, z);
+      hi = Math.max(hi, z);
+    }
+    return { zMin: lo, zSpan: Math.max(hi - lo, 1e-9) };
+  }, [line]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = prepareCanvas(canvas, width, height);
     if (!ctx) return;
+    const r = plotRect(width, height, PAD);
 
-    const w = canvas.width;
-    const h = canvas.height;
+    const xAt = (s: number) => r.left + (s / line.loopLengthM) * r.width;
+    const yAt = (z: number) => r.top + r.height - ((z - zMin) / zSpan) * r.height;
 
-    let zMin = Infinity;
-    let zMax = -Infinity;
-    for (let i = 0; i < line.nPoints; i++) {
-      zMin = Math.min(zMin, line.positionYup[3 * i + 1]);
-      zMax = Math.max(zMax, line.positionYup[3 * i + 1]);
-    }
-    const zSpan = Math.max(zMax - zMin, 1e-9);
-    const loop = line.loopLengthM;
-
-    const xAt = (s: number) => (s / loop) * (w - 8) + 4;
-    const yAt = (z: number) => h - 6 - ((z - zMin) / zSpan) * (h - 16);
+    const fill = ctx.createLinearGradient(0, r.top, 0, r.top + r.height);
+    fill.addColorStop(0, tokens.terrainHi);
+    fill.addColorStop(1, tokens.terrainLo);
 
     let raf = 0;
     const draw = () => {
-      ctx.clearRect(0, 0, w, h);
+      ctx.clearRect(0, 0, width, height);
 
-      ctx.strokeStyle = "#3a3a4a";
-      ctx.lineWidth = 1.2;
+      // filled profile
       ctx.beginPath();
+      ctx.moveTo(r.left, r.top + r.height);
       for (let i = 0; i < line.nPoints; i++) {
-        const x = xAt(line.sM[i]);
-        const y = yAt(line.positionYup[3 * i + 1]);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        ctx.lineTo(xAt(line.sM[i]), yAt(line.positionYup[3 * i + 1]));
       }
+      ctx.lineTo(r.left + r.width, r.top + r.height);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = tokens.lineStrong;
+      ctx.lineWidth = 1;
       ctx.stroke();
 
-      const s = progressRef.current.sM;
-      ctx.strokeStyle = "#00e5ff";
+      const frac = Math.min(Math.max(progressRef.current.sM / line.loopLengthM, 0), 1);
+      const x = r.left + frac * r.width;
+      ctx.strokeStyle = tokens.accent;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(xAt(s), 2);
-      ctx.lineTo(xAt(s), h - 2);
+      ctx.moveTo(x + 0.5, r.top - 2);
+      ctx.lineTo(x + 0.5, r.top + r.height);
       ctx.stroke();
 
-      ctx.fillStyle = "#6a6a78";
-      ctx.font = "9px monospace";
-      ctx.fillText(`elevation, range ${zSpan.toFixed(0)} m`, 6, 10);
+      ctx.fillStyle = tokens.textDim;
+      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = "left";
+      ctx.fillText("elevation", r.left, 10);
+      ctx.textAlign = "right";
+      ctx.fillText(`${zSpan.toFixed(0)} m range`, r.left + r.width, 10);
 
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
 
     const scrub = (clientX: number) => {
-      const rect = canvas.getBoundingClientRect();
-      const frac = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 0.9999);
+      const f = fracAtClientX(canvas, clientX, r);
       const p = progressRef.current;
-      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: frac * loop };
+      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: Math.min(f, 0.9999) * line.loopLengthM };
     };
     const down = (e: PointerEvent) => {
       dragging.current = true;
@@ -84,8 +109,9 @@ export function ElevationStrip({ line, progressRef, onScrubStart }: ElevationStr
     const move = (e: PointerEvent) => {
       if (dragging.current) scrub(e.clientX);
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
       dragging.current = false;
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     };
     canvas.addEventListener("pointerdown", down);
     canvas.addEventListener("pointermove", move);
@@ -96,14 +122,14 @@ export function ElevationStrip({ line, progressRef, onScrubStart }: ElevationStr
       canvas.removeEventListener("pointermove", move);
       canvas.removeEventListener("pointerup", up);
     };
-  }, [line, progressRef, onScrubStart]);
+  }, [line, width, height, tokens, zMin, zSpan, progressRef, onScrubStart]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={640}
-      height={44}
-      style={{ display: "block", cursor: "ew-resize" }}
+      role="img"
+      aria-label={`Elevation profile around the lap, total range ${zSpan.toFixed(0)} metres.`}
+      style={{ display: "block", cursor: "ew-resize", touchAction: "none" }}
     />
   );
 }
