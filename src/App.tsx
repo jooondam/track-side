@@ -17,7 +17,7 @@ import { buildLapTimeTable } from "./solver/lapTime";
 import { VelocitySolver } from "./solver/velocity";
 import { buildViewpoints } from "./render/viewpoints";
 import { TRACKS } from "./tracks";
-import type { CornerLabel } from "./tracks";
+import type { Corner } from "./assets";
 import { ColorLegend } from "./ui/ColorLegend";
 import { HelpOverlay } from "./ui/HelpOverlay";
 import { Landing } from "./ui/Landing";
@@ -129,14 +129,14 @@ function Viewer() {
       assets
         ? buildViewpoints(
             assets.line,
-            trackDef.corners,
+            assets.landmarks.corners,
             sceneCenter(assets),
             sceneExtent(assets),
             exaggeration,
             portrait ? 1.7 : 1,
           )
         : [],
-    [assets, trackDef, exaggeration, portrait],
+    [assets, exaggeration, portrait],
   );
   const viewpoint =
     viewpoints.find((v) => v.id === viewpointId) ?? viewpoints[0] ?? FALLBACK_VIEWPOINT;
@@ -152,7 +152,7 @@ function Viewer() {
   );
 
   const selectCorner = useCallback(
-    (corner: CornerLabel) => setViewpointId(`corner:${corner.name}`),
+    (corner: Corner) => setViewpointId(`corner:${corner.name}`),
     [],
   );
 
@@ -317,7 +317,6 @@ function Viewer() {
       >
         <Scene
           assets={assets}
-          trackDef={trackDef}
           result={result}
           ghostResult={ghostResult}
           colorMode={colorMode}
@@ -347,7 +346,7 @@ function Viewer() {
           <Landing
             circuitName={trackDef.displayName}
             lapTimeS={result.lapTimeS}
-            cornerCount={trackDef.corners.length}
+            cornerCount={assets.landmarks.corners.length}
             elevationRangeM={elevationRangeM}
             onEnter={() => setShowLanding(false)}
           />
@@ -360,7 +359,7 @@ function Viewer() {
         line={assets.line}
         result={result}
         table={table}
-        corners={trackDef.corners}
+        corners={assets.landmarks.corners}
         progressRef={progressRef}
         onHoverIndex={setHoverIndex}
         onScrubStart={pauseForScrub}

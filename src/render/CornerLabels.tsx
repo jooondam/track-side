@@ -13,12 +13,12 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { LineData } from "../assets";
-import type { CornerLabel } from "../tracks";
+import type { Corner } from "../assets";
 import { useThemeTokens } from "../ui/theme";
 
 interface CornerLabelsProps {
   line: LineData;
-  corners: CornerLabel[];
+  corners: Corner[];
   exaggeration: number;
 }
 

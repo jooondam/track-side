@@ -14,18 +14,18 @@ import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 import type { VelocityProfileResult } from "../solver/velocity";
 import { PHASE_ACCEL, PHASE_BRAKE } from "../solver/velocity";
-import type { CornerLabel } from "../tracks";
+import type { Corner } from "../assets";
 
 interface SpeedTraceProps {
   line: LineData;
   result: VelocityProfileResult;
-  corners: CornerLabel[];
+  corners: Corner[];
   width: number;
   height?: number;
   progressRef: React.MutableRefObject<LapProgress>;
   onHoverIndex: (index: number | null) => void;
   onScrubStart: () => void;
-  onCornerSelect: (corner: CornerLabel) => void;
+  onCornerSelect: (corner: Corner) => void;
 }
 
 export function SpeedTrace({
@@ -193,10 +193,10 @@ export function SpeedTrace({
       p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: line.sM[indexAtFrac(f)] };
     };
 
-    const nearestCorner = (f: number): CornerLabel | null => {
+    const nearestCorner = (f: number): Corner | null => {
       const s = f * line.loopLengthM;
       const tolM = (14 / Math.max(r.width, 1)) * line.loopLengthM;
-      let best: CornerLabel | null = null;
+      let best: Corner | null = null;
       let bestD = tolM;
       for (const c of corners) {
         const d = Math.abs(c.sM - s);

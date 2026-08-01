@@ -16,18 +16,18 @@ import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 import type { LapTimeTable } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
-import type { CornerLabel } from "../tracks";
+import type { Corner } from "../assets";
 
 interface TelemetryDockProps {
   dock: Expandable;
   line: LineData;
   result: VelocityProfileResult;
   table: LapTimeTable;
-  corners: CornerLabel[];
+  corners: Corner[];
   progressRef: React.MutableRefObject<LapProgress>;
   onHoverIndex: (index: number | null) => void;
   onScrubStart: () => void;
-  onCornerSelect: (corner: CornerLabel) => void;
+  onCornerSelect: (corner: Corner) => void;
 }
 
 export function TelemetryDock(props: TelemetryDockProps) {
