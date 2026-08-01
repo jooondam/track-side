@@ -45,7 +45,12 @@ const FZ_TOLERANCE_N = 0.5;
 // weather rather than on the code, so CI gets a budget scaled past the observed spread while
 // still catching the thing worth catching: an order-of-magnitude regression. the 16 ms claim
 // is verified locally and, ultimately, in the browser.
-const BUDGET_MS = process.env.CI ? 120 : 16;
+// reached through globalThis because this package has no @types/node: the app itself never
+// touches process, and pulling in node typings to read one env var in one test is a poor trade
+const isCi = Boolean(
+  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.CI,
+);
+const BUDGET_MS = isCi ? 120 : 16;
 
 interface Fixture {
   meta: { load_transfer_iters: number; cap_iters: number };
