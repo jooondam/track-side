@@ -38,10 +38,13 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from scipy.spatial import cKDTree
 
 from offline.elevation.profile import load_elevation_profile
 from offline.geometry.pipeline import build_track
+from offline.landmarks.build import landmarks_to_json_dict
+from offline.landmarks.checks import run_all_landmark_checks
+from offline.landmarks.data import CIRCUITS
+from offline.mesh.terrain import build_terrain_grid
 from offline.mincurv.line import build_mincurv_line
 from offline.velocity.solver import solve_velocity_profile, vehicle_to_json_dict
 from offline.velocity.vehicle import CAP_ITERS, DEFAULT_GT3, LOAD_TRANSFER_ITERS
@@ -50,57 +53,6 @@ from offline.velocity.vehicle import CAP_ITERS, DEFAULT_GT3, LOAD_TRANSFER_ITERS
 def _to_yup(x_m: np.ndarray, y_m: np.ndarray, z_m: np.ndarray) -> np.ndarray:
     """track frame (z up) to glTF frame (y up), matching offline/mesh/gltf.py's rotation."""
     return np.column_stack([x_m, z_m, -y_m])
-
-
-def _terrain_grid(
-    track, z_m: np.ndarray, n_cells: int = 140, margin_frac: float = 0.35
-) -> dict:
-    """IDW-interpolated landscape height grid around the circuit, in the Y-up frame's ground
-    plane (grid axes are gltf x and z = -track_y; heights are gltf y).
-
-    heights are exact near the track (nearest track point dominates the weighting) and relax
-    toward the track's mean elevation with distance, with a distance-based blend so far-field
-    terrain flattens out rather than extrapolating structure the data can't support.
-    """
-    gx = track.x_m
-    gz = -track.y_m
-    span_x = gx.max() - gx.min()
-    span_z = gz.max() - gz.min()
-    pad_x = span_x * margin_frac
-    pad_z = span_z * margin_frac
-    x0, x1 = gx.min() - pad_x, gx.max() + pad_x
-    z0, z1 = gz.min() - pad_z, gz.max() + pad_z
-
-    xs = np.linspace(x0, x1, n_cells)
-    zs = np.linspace(z0, z1, n_cells)
-    grid_x, grid_z = np.meshgrid(xs, zs)
-    query = np.column_stack([grid_x.ravel(), grid_z.ravel()])
-
-    tree = cKDTree(np.column_stack([gx, gz]))
-    k = 12
-    distances, indices = tree.query(query, k=k)
-    weights = 1.0 / np.maximum(distances, 1.0) ** 2
-    idw = np.sum(weights * z_m[indices], axis=1) / np.sum(weights, axis=1)
-
-    # blend toward the mean with distance from the track: full data inside ~150 m,
-    # fully relaxed beyond ~1200 m
-    nearest = distances[:, 0]
-    relax = np.clip((nearest - 150.0) / 1050.0, 0.0, 1.0)
-    heights = (1.0 - relax) * idw + relax * float(np.mean(z_m))
-
-    return {
-        "schema_version": 1,
-        "meta": {
-            "circuit_name": track.circuit_name,
-            "frame": "gltf Y-up; x0/z0 origin, heights are gltf y in metres",
-            "n_cells": n_cells,
-            "x0": round(float(x0), 2),
-            "z0": round(float(z0), 2),
-            "dx": round(float((x1 - x0) / (n_cells - 1)), 4),
-            "dz": round(float((z1 - z0) / (n_cells - 1)), 4),
-        },
-        "heights": np.round(heights.reshape(n_cells, n_cells), 2).tolist(),
-    }
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -138,6 +90,15 @@ def main(argv: list[str] | None = None) -> int:
         line = build_mincurv_line(
             track, margin_m=args.margin_m, spacing_m=args.spacing_m, elevation=elevation
         )
+        # landmarks are the one hand-typed artifact here, so they are gated against the
+        # geometry that was just generated rather than trusted
+        landmarks = CIRCUITS.get(args.circuit.lower())
+        if landmarks is None:
+            raise ValueError(
+                f"no landmark data for circuit {args.circuit!r}; add it to "
+                f"offline/landmarks/data.py"
+            )
+        run_all_landmark_checks(landmarks, track, line.loop_length_m)
     except (AssertionError, ValueError) as exc:
         print(f"asset build failed: {exc}", file=sys.stderr)
         return 1
@@ -192,8 +153,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
+    # the identical grid build_mesh.py tied the apron to, so the roadside meets the landscape
     (out_dir / "terrain.json").write_text(
-        json.dumps(_terrain_grid(track, elevation.z_m), separators=(",", ":"))
+        json.dumps(build_terrain_grid(track, elevation.z_m).to_json_dict(), separators=(",", ":"))
     )
 
     (out_dir / "line.json").write_text(
@@ -214,6 +176,12 @@ def main(argv: list[str] | None = None) -> int:
                 },
             },
             separators=(",", ":"),
+        )
+    )
+
+    (out_dir / "landmarks.json").write_text(
+        json.dumps(
+            landmarks_to_json_dict(landmarks, line.loop_length_m), separators=(",", ":")
         )
     )
 

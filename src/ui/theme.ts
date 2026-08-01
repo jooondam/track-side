@@ -47,14 +47,17 @@ export interface ThemeTokens {
   carBody: string;
   carCarbon: string;
   carGlass: string;
-  // phase palette. Deliberately a cyan/amber axis rather than the red/green it replaces:
-  // red-green is the axis lost in deuteranopia and protanopia, which together affect roughly
-  // 8% of men, and reading the phase colouring is the entire job of this tool.
+  // phase palette: green accelerating, red braking, neutral holding. the traffic-light reading,
+  // which is what nearly everyone expects a racing line to mean without being told.
   //
-  // warm is braking, not accelerating. that is the opposite of the traffic-light instinct but
-  // it matches the only heat the scene actually models: the car's own brake discs already glow
-  // brakeGlow under load. coast sits at low chroma so it recedes, leaving the line reading as
-  // two active phases separated by gaps rather than three competing bands.
+  // red-green is also the axis lost in deuteranopia and protanopia, roughly 8% of men, so the
+  // two are separated on a **second** channel as well: the green is much lighter than the red
+  // (roughly 76 vs 55 in perceptual lightness). A dichromat sees both as similar hues but at
+  // clearly different brightness, so the line stays readable without relying on the hue alone.
+  // Do not "balance" these to equal lightness; the difference is the accessibility mechanism.
+  //
+  // coast sits at low chroma so it recedes, leaving the line reading as two active phases
+  // separated by gaps rather than three competing bands.
   phaseAccel: string;
   phaseBrake: string;
   phaseCoast: string;
@@ -93,8 +96,8 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     carBody: "#ff5c1a",
     carCarbon: "#15171d",
     carGlass: "#0c1218",
-    phaseAccel: "#39d0ff",
-    phaseBrake: "#ff9e2c",
+    phaseAccel: "#35d96a",
+    phaseBrake: "#e8402e",
     phaseCoast: "#5d6472",
     lightKey: 1.5,
     lightHemiSky: "#2a3040",
@@ -128,8 +131,8 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     carBody: "#d92e14",
     carCarbon: "#2a2d34",
     carGlass: "#4a5560",
-    phaseAccel: "#067ea6",
-    phaseBrake: "#c2610a",
+    phaseAccel: "#1a9e4b",
+    phaseBrake: "#c11f10",
     phaseCoast: "#737a88",
     lightKey: 1.2,
     lightHemiSky: "#f2f4f8",
@@ -159,9 +162,12 @@ export const MATERIAL = {
 export const SPACE = { s1: 4, s2: 8, s3: 12, s4: 16, s5: 24, s6: 32 } as const;
 export const RADIUS = { sm: 2, md: 3, lg: 4 } as const;
 export const MOTION = {
+  // easeOutQuint: most of the travel happens early, so a panel feels like it is settling into
+  // place rather than decelerating into it. `base` is the panel open/close duration; at 240 ms
+  // the rail arrived before the eye had followed it, which read as a jump rather than a slide.
   ease: "cubic-bezier(0.22, 1, 0.36, 1)",
   fast: 140,
-  base: 240,
+  base: 300,
   slow: 800,
 } as const;
 export const FONT = {

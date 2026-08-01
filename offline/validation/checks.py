@@ -231,6 +231,38 @@ def assert_grade_plausible(grade_rad: np.ndarray, max_grade_frac: float = 0.25) 
         )
 
 
+def assert_apron_meets_terrain(worst_gap_m: float, max_gap_m: float = 0.5) -> None:
+    """raise if the apron's outer edge does not land on the terrain it is meant to tie into.
+
+    measured from the exported Y-up positions rather than from the arrays that placed them, so
+    this exercises the frame rotation rather than restating the placement. it fires on a dropped
+    negation in z_up_to_y_up, an apron built against a different grid than the one shipped, or a
+    lift that stopped being applied.
+    """
+    if worst_gap_m > max_gap_m:
+        raise AssertionError(
+            f"apron outer edge misses the terrain by {worst_gap_m:.3f} m, over the "
+            f"{max_gap_m} m budget; check the Y-up rotation and that the apron and "
+            f"terrain.json came from the same grid"
+        )
+
+
+def assert_apron_slope_plausible(worst_slope: float, max_slope: float = 0.35) -> None:
+    """raise if the apron has become a cliff rather than a roadside run-off.
+
+    the apron follows the terrain at its outer edge, which is right until the terrain falls away
+    for reasons that have nothing to do with the road: at Spa the ground below Les Combes drops
+    30 m within 50 m of the track edge. Past this slope the apron is modelling an embankment it
+    has no business modelling, and the terrain mesh should be rendering that drop instead.
+    """
+    if worst_slope > max_slope:
+        raise AssertionError(
+            f"apron reaches a {worst_slope * 100:.0f}% slope, over the "
+            f"{max_slope * 100:.0f}% budget; the terrain ramp is reaching past the roadside "
+            f"into unrelated topography"
+        )
+
+
 def lateral_deviation(line_a_xy: np.ndarray, line_b_xy: np.ndarray) -> dict[str, float]:
     """nearest-point distance stats between two (N, 2) polylines.
 

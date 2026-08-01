@@ -51,12 +51,56 @@ def test_topology_counts_and_index_validity(circle_track) -> None:
     mesh = build_ribbon_mesh(circle_track, _flat_elevation(circle_track))
 
     n = circle_track.n_points - 1  # closed duplicate dropped
-    assert mesh.vertices.shape == (2 * n, 3)
+    # 2n+2, not 2n: the UV seam splits cross-section 0 so it can carry both v = 0 and v = L.
+    # the triangle count is unchanged, because the last quad was repointed rather than added to.
+    assert mesh.n_cross_sections == n
+    assert mesh.vertices.shape == (2 * n + 2, 3)
+    assert mesh.normals.shape == (2 * n + 2, 3)
+    assert mesh.uvs.shape == (2 * n + 2, 2)
     assert mesh.triangles.shape == (2 * n, 3)
-    assert mesh.normals.shape == (2 * n, 3)
     assert mesh.triangles.max() < len(mesh.vertices)
-    # every vertex is used by at least one triangle (no orphans at the wraparound seam)
+    # every vertex is used by at least one triangle (no orphans left by the seam repoint)
     assert len(np.unique(mesh.triangles)) == len(mesh.vertices)
+
+
+def test_seam_duplicates_position_and_normal_but_not_v(circle_track) -> None:
+    """the seam pair is a texture-space split only, never a geometric or shading one."""
+    mesh = build_ribbon_mesh(circle_track, _hilly_elevation(circle_track))
+    n = mesh.n_cross_sections
+
+    np.testing.assert_allclose(mesh.vertices[2 * n :], mesh.vertices[0:2], atol=1e-6)
+    np.testing.assert_allclose(mesh.normals[2 * n :], mesh.normals[0:2], atol=1e-6)
+    # same lateral fraction, but v jumps from 0 to a full lap
+    np.testing.assert_allclose(mesh.uvs[2 * n :, 0], mesh.uvs[0:2, 0], atol=1e-6)
+    np.testing.assert_allclose(
+        mesh.uvs[2 * n :, 1], circle_track.loop_length_m, rtol=1e-6
+    )
+    assert float(mesh.uvs[0, 1]) == pytest.approx(0.0)
+
+
+def test_uv_v_channel_is_arc_length_in_metres(circle_track) -> None:
+    # metres, not a 0..1 wrap: tiling stays a runtime decision and a widening track does not
+    # stretch its texels
+    mesh = build_ribbon_mesh(circle_track, _flat_elevation(circle_track))
+    n = mesh.n_cross_sections
+
+    np.testing.assert_allclose(mesh.uvs[0 : 2 * n : 2, 1], circle_track.s_m[:n], atol=1e-3)
+    np.testing.assert_allclose(mesh.uvs[1 : 2 * n : 2, 1], circle_track.s_m[:n], atol=1e-3)
+    # lateral fraction spans the road exactly once
+    assert set(np.unique(mesh.uvs[:, 0]).round(6)) == {0.0, 1.0}
+
+
+def test_no_texture_compression_into_the_final_quad(circle_track) -> None:
+    """the bug the seam exists to prevent, stated as a property.
+
+    without the split, the last quad would run v from L back to 0 and squeeze an entire lap of
+    texture into two triangles. every quad's v span should instead be one cross-section wide.
+    """
+    mesh = build_ribbon_mesh(circle_track, _flat_elevation(circle_track))
+    v = mesh.uvs[:, 1]
+    spans = np.abs(v[mesh.triangles[:, 1]] - v[mesh.triangles[:, 0]])
+    spans = np.maximum(spans, np.abs(v[mesh.triangles[:, 2]] - v[mesh.triangles[:, 0]]))
+    assert float(np.max(spans)) < 0.02 * circle_track.loop_length_m
 
 
 def test_normals_point_up_on_flat_track(circle_track) -> None:
@@ -85,8 +129,9 @@ def test_elevation_is_attached(circle_track) -> None:
 
     # left and right vertex of each cross-section share the same z (flat cross-section,
     # assumption #3), and the z range matches the profile's
-    left_z = mesh.vertices[0::2, 2]
-    right_z = mesh.vertices[1::2, 2]
+    n = mesh.n_cross_sections
+    left_z = mesh.vertices[0 : 2 * n : 2, 2]
+    right_z = mesh.vertices[1 : 2 * n : 2, 2]
     np.testing.assert_allclose(left_z, right_z, atol=1e-6)
     assert float(left_z.max() - left_z.min()) == pytest.approx(
         elevation.total_range_m, rel=1e-3
@@ -96,7 +141,10 @@ def test_elevation_is_attached(circle_track) -> None:
 def test_mesh_width_matches_track_width(circle_track) -> None:
     mesh = build_ribbon_mesh(circle_track, _flat_elevation(circle_track))
 
-    widths = np.linalg.norm(mesh.vertices[0::2] - mesh.vertices[1::2], axis=1)
+    n = mesh.n_cross_sections  # exclude the trailing seam pair, which repeats section 0
+    widths = np.linalg.norm(
+        mesh.vertices[0 : 2 * n : 2] - mesh.vertices[1 : 2 * n : 2], axis=1
+    )
     expected = circle_track.w_tr_left_m[:-1] + circle_track.w_tr_right_m[:-1]
     np.testing.assert_allclose(widths, expected, rtol=1e-3)
 

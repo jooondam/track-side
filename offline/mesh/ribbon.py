@@ -23,21 +23,30 @@ import numpy as np
 
 from offline.elevation.profile import ElevationProfile
 from offline.geometry.pipeline import TrackGeometry
+from offline.mesh.gltf import Attribute, Primitive, z_up_to_y_up
 
 
 @dataclass(frozen=True)
 class RibbonMesh:
-    """triangulated track surface. vertices (2n, 3) float32 in track frame (z up, metres);
-    row layout [left_0, right_0, left_1, right_1, ...]. triangles (2n, 3) uint32."""
+    """triangulated track surface.
+
+    vertices (2n+2, 3) float32 in track frame (z up, metres); row layout
+    [left_0, right_0, left_1, right_1, ..., left_0', right_0'], where the trailing pair are the
+    seam duplicates described in build_ribbon_mesh. triangles (2n, 3) uint32.
+
+    uvs (2n+2, 2) float32 carry (lateral_frac, s_m): lateral_frac is 0 at the left boundary and
+    1 at the right, and the second channel is arc length **in metres**, not a tiled 0..1. That
+    is deliberate. Baking a tile size here would freeze a rendering decision into the asset, and
+    a 0..1 wrap would stretch texels wherever the track widens. Metres let the runtime pick its
+    own repeat and keep texel density constant along a variable-width road.
+    """
 
     circuit_name: str
     vertices: np.ndarray
     triangles: np.ndarray
     normals: np.ndarray
-
-    @property
-    def n_cross_sections(self) -> int:
-        return len(self.vertices) // 2
+    uvs: np.ndarray
+    n_cross_sections: int
 
 
 def _vertex_normals(vertices: np.ndarray, triangles: np.ndarray) -> np.ndarray:
@@ -103,11 +112,54 @@ def build_ribbon_mesh(track: TrackGeometry, elevation: ElevationProfile) -> Ribb
     if np.any(z_component == 0):
         raise ValueError("degenerate (zero-area) triangle in ribbon")
 
+    # normals are averaged on the *wrapped* topology, before the seam is split. that ordering is
+    # the whole point: vertex 0 still has triangles from both sides of the start line at this
+    # moment, so its normal is the correct average, and the duplicate below inherits it verbatim.
+    # split first and the seam would shade as a crease.
     normals = _vertex_normals(vertices, triangles)
+
+    # the UV seam. the ribbon closes by (idx+1)%n, so cross-section 0 would have to carry both
+    # v = 0 and v = L, and any texture would compress a whole lap into the final quad. duplicate
+    # cross-section 0 at v = L and point the last quad at the copies: 2n+2 vertices, still 2n
+    # triangles, shading-continuous and now texture-continuous too.
+    lateral = np.tile([0.0, 1.0], n)
+    s_per_vertex = np.repeat(track.s_m[:n], 2)
+    uvs = np.column_stack([lateral, s_per_vertex])
+
+    vertices = np.vstack([vertices, vertices[0:2]])
+    normals = np.vstack([normals, normals[0:2]])
+    uvs = np.vstack([uvs, [[0.0, track.loop_length_m], [1.0, track.loop_length_m]]])
+
+    # rewrite by value rather than by column, since the winding fix above may have permuted the
+    # columns: in the last quad only, vertex 0 becomes 2n and vertex 1 becomes 2n+1
+    last_quad = triangles[2 * (n - 1) : 2 * n]
+    last_quad[last_quad == 0] = 2 * n
+    last_quad[last_quad == 1] = 2 * n + 1
 
     return RibbonMesh(
         circuit_name=track.circuit_name,
         vertices=vertices.astype(np.float32),
         triangles=triangles,
         normals=normals.astype(np.float32),
+        uvs=uvs.astype(np.float32),
+        n_cross_sections=n,
     )
+
+
+def ribbon_to_primitives(mesh: RibbonMesh, material_index: int) -> list[Primitive]:
+    """adapt a RibbonMesh into the generic writer's Primitive form.
+
+    lives here rather than in gltf.py so the writer stays ignorant of what a ribbon is.
+    """
+    return [
+        Primitive(
+            name="asphalt",
+            indices=mesh.triangles.reshape(-1),
+            attributes=[
+                Attribute("POSITION", z_up_to_y_up(mesh.vertices)),
+                Attribute("NORMAL", z_up_to_y_up(mesh.normals)),
+                Attribute("TEXCOORD_0", mesh.uvs, type_str="VEC2"),
+            ],
+            material=material_index,
+        )
+    ]

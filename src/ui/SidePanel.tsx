@@ -78,9 +78,17 @@ export function SidePanel(props: SidePanelProps) {
       aria-hidden={narrow && !drawerOpen}
       {...(narrow ? {} : panel.handlers)}
       style={{
-        gridArea: "side",
-        width: expanded ? 280 : 56,
+        // an overlay on the viewport, not a column beside it: expanding the rail must not
+        // resize the canvas underneath. `width` still animates, but now only this element
+        // relayouts rather than the whole frame plus the WebGL buffer.
+        position: "absolute",
+        top: 48,
+        left: 0,
+        bottom: 0,
+        zIndex: 20,
+        width: "var(--rail-w, 56px)",
         transition: "width var(--t-base) var(--ease)",
+        willChange: "width",
         background: "var(--panel)",
         borderRight: "1px solid var(--line)",
         overflowX: "hidden",
