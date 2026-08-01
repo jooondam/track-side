@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from scipy.spatial import cKDTree
 
 from offline.elevation.profile import load_elevation_profile
 from offline.geometry.pipeline import build_track
@@ -99,6 +100,30 @@ def test_elevation_reaches_the_solver_rather_than_just_the_viewer(spa_line, grad
     # the z the viewer draws are the same array; before that they were separate code paths
     assert float(np.ptp(spa_line.z_m)) > 90.0
     assert float(np.max(np.abs(graded.grade_rad))) > 0.05
+
+
+def test_the_racing_line_sits_on_the_road_surface(spa_line) -> None:
+    """the line's z must match the surface directly beneath it, everywhere.
+
+    it used to be draped by fractional loop position, which is fine on a flat circuit and wrong
+    on this one: a racing line cuts corners, so its fraction around the lap leads the centerline
+    point it is physically beside by tens of metres of arc, and at Raidillon that handed it the
+    elevation from 1.5 m further up the hill. The line rendered *below* the track it is painted
+    on, and the car with it.
+
+    the cross-section is flat (assumption #3), so the correct surface height at a line point is
+    the height of the centerline station it sits across from.
+    """
+    track = build_track(SPA_CSV, circuit_name="Spa", spacing_m=1.0, gps_noise_std_m=0.1)
+    elevation = load_elevation_profile(ELEVATION_JSON)
+
+    tree = cKDTree(np.column_stack([track.x_m[:-1], track.y_m[:-1]]))
+    _, nearest = tree.query(np.column_stack([spa_line.x_m, spa_line.y_m]))
+    surface_z = elevation.z_m[:-1][nearest]
+
+    # a decimetre covers the residual from sampling a 1 m grid at nearest approach; the old
+    # fractional drape missed by 1.52 m
+    assert float(np.max(np.abs(spa_line.z_m - surface_z))) < 0.1
 
 
 def test_gravity_does_no_net_work_around_a_closed_lap(spa_line) -> None:

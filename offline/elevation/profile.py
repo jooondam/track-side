@@ -162,6 +162,70 @@ def load_elevation_profile(json_path: Path) -> ElevationProfile:
     )
 
 
+def drape_elevation_onto_path(
+    path_x_m: np.ndarray,
+    path_y_m: np.ndarray,
+    track,
+    elevation: ElevationProfile,
+) -> np.ndarray:
+    """sample z for a path by where its points physically *are* on the track, not by arc length.
+
+    this replaces the fractional-loop drape for the racing line, and the difference is visible
+    rather than academic. A racing line cuts corners, so at any corner its fractional position
+    around the lap leads or lags the centerline point it is physically beside, by tens of metres
+    of arc. Sampling by fraction then hands it the elevation from somewhere else on the circuit:
+    on Spa's 12% gradients a 20 m lag is 2.4 m of z error, and the line sinks through the road
+    surface it is supposed to be painted on.
+
+    The cross-section is flat (assumption #3), so the surface height at a line point is the
+    height of the centerline station it sits across from. Finding that station by nearest
+    approach, and refining it along the local segment, puts the line on the mesh by construction
+    instead of by coincidence.
+
+    Loop closure survives: the path's first and last points are the same point, so they resolve
+    to the same station and the same z. That matters because M8 made gravity part of the
+    physics, and a closure residual is a net energy injection per lap.
+    """
+    centre = np.column_stack([track.x_m[:-1], track.y_m[:-1]])
+    tree = cKDTree(centre)
+    _, nearest = tree.query(np.column_stack([path_x_m, path_y_m]))
+
+    n = len(centre)
+    station = track.s_m[:-1][nearest].astype(float)
+
+    # refine along whichever adjacent segment the point actually projects onto, so z varies
+    # smoothly instead of stepping every time the nearest vertex changes
+    loop_length = float(track.s_m[-1])
+    for step in (1, -1):
+        neighbour = (nearest + step) % n
+        segment = centre[neighbour] - centre[nearest]
+        length_sq = np.sum(segment**2, axis=1)
+        to_point = np.column_stack([path_x_m, path_y_m]) - centre[nearest]
+        t = np.clip(
+            np.sum(to_point * segment, axis=1) / np.maximum(length_sq, 1e-12), 0.0, 1.0
+        )
+        ds = (track.s_m[:-1][neighbour] - track.s_m[:-1][nearest] + loop_length / 2) % (
+            loop_length
+        ) - loop_length / 2
+        candidate = station + t * ds
+        projected = centre[nearest] + t[:, None] * segment
+        distance = np.linalg.norm(
+            projected - np.column_stack([path_x_m, path_y_m]), axis=1
+        )
+        if step == 1:
+            best_distance, best_station = distance, candidate
+        else:
+            closer = distance < best_distance
+            best_station = np.where(closer, candidate, best_station)
+
+    z_m = np.interp(
+        best_station % loop_length, elevation.s_m, elevation.z_m, period=loop_length
+    )
+    # the path is closed-duplicate, so make the closure exact rather than near-exact
+    z_m[-1] = z_m[0]
+    return z_m
+
+
 def drape_elevation(
     s_m: np.ndarray, loop_length_m: float, elevation: ElevationProfile
 ) -> np.ndarray:

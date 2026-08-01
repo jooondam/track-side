@@ -17,8 +17,14 @@ import pytest
 
 from offline.elevation.profile import load_elevation_profile
 from offline.geometry.pipeline import build_track
-from offline.mesh.gltf import write_glb
-from offline.mesh.ribbon import build_ribbon_mesh
+from offline.mesh.gltf import MaterialDef, write_glb
+from offline.mesh.ribbon import build_ribbon_mesh, ribbon_to_primitives
+from offline.mesh.surfaces import build_track_primitives
+from offline.mesh.terrain import build_terrain_grid
+from offline.validation.checks import (
+    assert_apron_meets_terrain,
+    assert_apron_slope_plausible,
+)
 
 SPA_CSV = Path(__file__).resolve().parent.parent / "third_party" / "Spa.csv"
 ELEVATION_JSON = Path(__file__).resolve().parent.parent / "artifacts" / "spa" / "elevation.json"
@@ -54,7 +60,13 @@ def test_all_faces_point_up(spa_mesh) -> None:
 
 def test_glb_export_is_structurally_valid(spa_mesh, tmp_path) -> None:
     path = tmp_path / "spa.glb"
-    write_glb(spa_mesh, path)
+    write_glb(
+        ribbon_to_primitives(spa_mesh, 0),
+        [MaterialDef("asphalt")],
+        path,
+        scene_name="Spa",
+        node_name="Spa track surface",
+    )
 
     raw = path.read_bytes()
     magic, version, total_length = struct.unpack_from("<III", raw, 0)
@@ -66,3 +78,60 @@ def test_glb_export_is_structurally_valid(spa_mesh, tmp_path) -> None:
     primitive = gltf["meshes"][0]["primitives"][0]
     assert accessors[primitive["attributes"]["POSITION"]]["count"] == len(spa_mesh.vertices)
     assert accessors[primitive["indices"]]["count"] == spa_mesh.triangles.size
+
+
+@pytest.fixture(scope="module")
+def spa_surfaces(spa_track):
+    elevation = load_elevation_profile(ELEVATION_JSON)
+    terrain = build_terrain_grid(spa_track, elevation.z_m)
+    primitives, materials, diagnostics = build_track_primitives(spa_track, elevation, terrain)
+    return primitives, materials, diagnostics, terrain
+
+
+def test_the_full_surface_set_ships_asphalt_and_both_aprons(spa_surfaces) -> None:
+    primitives, materials, _, _ = spa_surfaces
+    assert [p.name for p in primitives] == ["asphalt", "apron_left", "apron_right"]
+    # each surface gets its own material slot so the runtime can key its generated textures
+    assert len({p.material for p in primitives}) == 3
+    assert [m.name for m in materials] == ["asphalt", "apron_left", "apron_right"]
+
+
+def test_apron_ties_into_the_terrain_it_will_be_rendered_against(spa_surfaces) -> None:
+    """the cross-artifact check: the apron edge lands on the grid terrain.json actually ships.
+
+    the build-time gate measures the same thing from the exported positions, but only against
+    the grid it just built. this rebuilds the grid the way build_viewer_assets.py does and
+    checks the apron against that, which is the failure the plan was actually worried about:
+    two artifacts generated from grids that quietly disagree.
+    """
+    primitives, _, diagnostics, terrain = spa_surfaces
+    assert_apron_meets_terrain(diagnostics["worst_terrain_gap_m"])
+    assert_apron_slope_plausible(diagnostics["worst_apron_slope"])
+
+    for primitive in primitives[1:]:
+        positions = primitive.attributes[0].data  # already Y-up
+        outer = positions[: diagnostics["cross_sections"] * 4].reshape(-1, 4, 3)[:, 3, :]
+        gap = np.abs(outer[:, 1] - terrain.sample_triangulated(outer[:, 0], outer[:, 2]))
+        # the outer edge rides a quarter metre proud, turning any residual into a small berm
+        # rather than z-fighting along the length of the circuit
+        np.testing.assert_allclose(gap, 0.25, atol=1e-4)
+
+
+def test_apron_lip_sits_just_above_the_road(spa_surfaces) -> None:
+    # the piece that stops the ribbon ending in mid-air and gives the instanced kerbs a base
+    primitives, _, diagnostics, _ = spa_surfaces
+    m = diagnostics["cross_sections"]
+    for primitive in primitives[1:]:
+        columns = primitive.attributes[0].data[: m * 4].reshape(-1, 4, 3)
+        rise = columns[:, 1, 1] - columns[:, 0, 1]
+        drop = columns[:, 2, 1] - columns[:, 0, 1]
+        np.testing.assert_allclose(rise, 0.06, atol=1e-4)
+        np.testing.assert_allclose(drop, -0.18, atol=1e-4)
+
+
+def test_triangle_budget_matches_the_planned_cost(spa_surfaces) -> None:
+    # the apron is decimated to 8 m precisely so this stays affordable; if it ever creeps back
+    # toward the 1 m racing surface the number to notice is this one
+    _, _, diagnostics, _ = spa_surfaces
+    assert diagnostics["asphalt_triangles"] == 14000
+    assert 24000 < diagnostics["total_triangles"] < 25500

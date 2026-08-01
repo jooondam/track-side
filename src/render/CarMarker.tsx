@@ -55,6 +55,16 @@ const SCALE_PER_METRE = 0.0055;
 const MAX_ROLL_RAD = 0.075;
 const BEACON_OUTER = 4.6; // local ring radius, before the distance compensation below
 
+// half the model's length in its own units. at SCALE_MAX the car is ~74 m long, which is longer
+// than most of the elevation features it drives over, so the road under it cannot be treated as
+// a point: both the pitch and the ride height below are sampled across this footprint.
+const MODEL_HALF_LENGTH = 2.3;
+// ride height, in car-lengths rather than metres, so a 16x car floats 16x higher. a fixed metre
+// offset is what let the scaled-up car sink into a climb: it cleared the road at the contact
+// point and buried its nose 5 m further up the hill.
+const CLEARANCE_PER_SCALE_M = 0.05;
+const MAX_PITCH_RAD = 0.5;
+
 export function CarMarker({
   line,
   result,
@@ -72,7 +82,38 @@ export function CarMarker({
   const sRef = useRef(0);
   const lastScrubId = useRef(-1);
   const rollRef = useRef(0);
+  const pitchRef = useRef(0);
   const tokens = useThemeTokens();
+
+  /**
+   * position on the *rendered* line at an arbitrary arc length, elevation exaggeration included.
+   *
+   * deriving the road under the car from the same geometry that is drawn, rather than from the
+   * solver's grade channel, means the car cannot disagree with the surface it is sitting on:
+   * whatever the exaggeration slider does to the road happens to the car for free.
+   */
+  const sampleAt = useMemo(() => {
+    return (query: number, exag: number, out: THREE.Vector3) => {
+      const loopM = line.loopLengthM;
+      const s = ((query % loopM) + loopM) % loopM;
+      const lo = lowerIndex(line.sM, s);
+      const hi = Math.min(lo + 1, line.nPoints - 1);
+      const f = (s - line.sM[lo]) / Math.max(line.sM[hi] - line.sM[lo], 1e-9);
+      return out.set(
+        line.positionYup[3 * lo] + f * (line.positionYup[3 * hi] - line.positionYup[3 * lo]),
+        (line.positionYup[3 * lo + 1] +
+          f * (line.positionYup[3 * hi + 1] - line.positionYup[3 * lo + 1])) *
+          exag,
+        line.positionYup[3 * lo + 2] +
+          f * (line.positionYup[3 * hi + 2] - line.positionYup[3 * lo + 2]),
+      );
+    };
+  }, [line]);
+
+  const scratch = useMemo(
+    () => ({ front: new THREE.Vector3(), rear: new THREE.Vector3(), probe: new THREE.Vector3() }),
+    [],
+  );
 
   const table = useMemo(
     () => buildLapTimeTable(line.sM, result.vMps, result.dlM),
@@ -111,12 +152,46 @@ export function CarMarker({
     const z =
       line.positionYup[3 * lo + 2] +
       f * (line.positionYup[3 * hi + 2] - line.positionYup[3 * lo + 2]);
-    groupRef.current.position.set(x, y * exaggeration + 0.4, z);
+    const roadY = y * exaggeration;
+    groupRef.current.position.set(x, roadY, z);
 
-    // keep the car legible at any zoom
+    // keep the car legible at any zoom. distance is measured to the road point rather than to
+    // the final ride height, which is fine (the lift is metres against a camera hundreds out)
+    // and breaks what would otherwise be a circular dependency: ride height needs the scale.
     const dist = camera.position.distanceTo(groupRef.current.position);
     const scale = THREE.MathUtils.clamp(dist * SCALE_PER_METRE, SCALE_MIN, SCALE_MAX);
     groupRef.current.scale.setScalar(scale);
+
+    // sit the car on its whole footprint, not on the single point under its centre. at 16x the
+    // body spans ~74 m of road, and on anything steeper than flat the far end of it was ending
+    // up under the surface: the car cleared the road where it touched and buried its nose.
+    const halfLen = MODEL_HALF_LENGTH * scale;
+    sampleAt(s + halfLen, exaggeration, scratch.front);
+    sampleAt(s - halfLen, exaggeration, scratch.rear);
+    let deckY = Math.max(roadY, scratch.front.y, scratch.rear.y);
+    // the ends alone would still let a crest push through the middle of a long car
+    for (const frac of [-0.5, 0.5]) {
+      sampleAt(s + frac * halfLen, exaggeration, scratch.probe);
+      deckY = Math.max(deckY, scratch.probe.y);
+    }
+    groupRef.current.position.y = deckY + CLEARANCE_PER_SCALE_M * scale;
+
+    // pitch with the road. taken from the rendered line rather than from the solver's grade
+    // channel, so it tracks whatever the elevation exaggeration slider is doing: at 3x the road
+    // climbs three times as steeply on screen and the car has to climb with it, which is why
+    // the old fixed-grade attempt looked broken and got switched off.
+    const runM = Math.hypot(
+      scratch.front.x - scratch.rear.x,
+      scratch.front.z - scratch.rear.z,
+    );
+    const targetPitch = THREE.MathUtils.clamp(
+      Math.atan2(scratch.front.y - scratch.rear.y, Math.max(runM, 1e-6)),
+      -MAX_PITCH_RAD,
+      MAX_PITCH_RAD,
+    );
+    pitchRef.current += (targetPitch - pitchRef.current) * Math.min(delta * 6, 1);
+    groupRef.current.rotation.order = "YXZ"; // yaw about world up, then pitch about the car's own axis
+    groupRef.current.rotation.x = pitchRef.current;
     // the beacon fades in only once the car itself has stopped being readable. Its scale has to
     // undo the car scaling above, or it inherits it and balloons to a couple of hundred metres
     // across: the ring is sized in real metres on the ground, not in car-lengths.
@@ -126,11 +201,13 @@ export function CarMarker({
       const outerM = 26 + t * 34;
       beaconRef.current.scale.setScalar(outerM / (BEACON_OUTER * scale));
       (beaconRef.current.material as THREE.MeshBasicMaterial).opacity = t * 0.5;
+      // undo the parent's pitch so the ring stays flat on the ground: it is a map marker, and a
+      // tilted one reads as part of the car rather than as a position on the circuit
+      beaconRef.current.rotation.x = -Math.PI / 2 - pitchRef.current;
     }
 
-    // yaw from the ground-plane tangent (pitch is skipped: at 3x elevation exaggeration a pitched
-    // car reads as broken rather than informative). The -PI/2 puts the model's nose (local -z) on
-    // the travel direction.
+    // yaw from the ground-plane tangent. The -PI/2 puts the model's nose (local -z) on the
+    // travel direction; pitch is applied above, about the car's own lateral axis.
     const ahead = (hi + 4) % (line.nPoints - 1);
     const dx = line.positionYup[3 * ahead] - x;
     const dz = line.positionYup[3 * ahead + 2] - z;
@@ -158,7 +235,9 @@ export function CarMarker({
       progressRef.current.tS = timeAtS(table, line.sM, s);
     }
     if (!ghost && poseRef) {
-      poseRef.current.position.set(x, y * exaggeration + 0.4, z);
+      // the chase camera follows the car's actual ride height, not the road point, or it dips
+      // through the surface every time the car climbs
+      poseRef.current.position.copy(groupRef.current.position);
       const len = Math.hypot(dx, dz);
       if (len > 1e-6) poseRef.current.direction.set(dx / len, 0, dz / len);
     }

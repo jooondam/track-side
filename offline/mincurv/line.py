@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 from scipy.interpolate import splev
 
-from offline.elevation.profile import ElevationProfile, drape_elevation
+from offline.elevation.profile import ElevationProfile, drape_elevation_onto_path
 from offline.geometry.curvature import curvature_from_derivatives
 from offline.geometry.pipeline import TrackGeometry
 from offline.geometry.resample import resample_by_arc_length
@@ -132,10 +132,13 @@ def build_line_from_offsets(
 
     assert_within_track_bounds(lateral_offset_m, w_left_new, w_right_new, margin_m=0.0)
 
+    # draped by physical position rather than by arc-length fraction: the line cuts corners, so
+    # its fractional position leads the centerline point it is beside, and sampling by fraction
+    # left it hanging below the road surface through every corner on a graded circuit
     z_m = (
         np.zeros_like(s_m)
         if elevation is None
-        else drape_elevation(s_m, float(s_m[-1]), elevation)
+        else drape_elevation_onto_path(centerline[:, 0], centerline[:, 1], track, elevation)
     )
 
     return OptimizedLine(

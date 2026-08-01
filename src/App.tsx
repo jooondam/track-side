@@ -241,16 +241,21 @@ function Viewer() {
         // while the hero is up the chrome is not rendered at all and the viewport takes the whole
         // frame. The Canvas is never unmounted across the transition, so entering is a camera
         // move rather than a reload.
-        gridTemplateAreas: showLanding
-          ? `"view"`
-          : narrow
-            ? `"top" "view" "dock"`
-            : `"top top" "side view" "side dock"`,
-        gridTemplateColumns: showLanding || narrow ? "1fr" : "auto 1fr",
-        gridTemplateRows: showLanding ? "1fr" : "48px 1fr auto",
+        // one column, two rows: the viewport owns everything below the top bar at every width.
+        // The rail and the dock are overlays on top of it rather than grid tracks beside it,
+        // so opening either one no longer resizes the canvas. That resize was not just a
+        // reflow: it reallocated the WebGL drawing buffer and reset the camera aspect on every
+        // toggle, which is what made expanding a panel jolt rather than slide.
+        gridTemplateAreas: showLanding ? `"view"` : `"top" "view"`,
+        gridTemplateColumns: "1fr",
+        gridTemplateRows: showLanding ? "1fr" : "48px 1fr",
         width: "100%",
         height: "100%",
+        position: "relative",
         background: "var(--bg)",
+        // the rail's current width, published so the dock can start where the rail ends and the
+        // two animate as one gesture. The canvas ignores it entirely, which is the point.
+        ["--rail-w" as string]: narrow || showLanding ? "0px" : sidePanel.expanded ? "280px" : "56px",
       }}
     >
       {!showLanding && (

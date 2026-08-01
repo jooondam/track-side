@@ -51,7 +51,16 @@ export function TelemetryDock(props: TelemetryDockProps) {
       aria-label="Telemetry"
       {...dock.handlers}
       style={{
-        gridArea: "dock",
+        // overlays the viewport rather than taking a row from it, so expanding the dock slides
+        // over the circuit instead of squeezing it and forcing a canvas resize
+        position: "absolute",
+        // starts where the rail ends, and animates with it, so the rail never covers the
+        // dock's own labels
+        left: "var(--rail-w, 0px)",
+        right: 0,
+        bottom: 0,
+        zIndex: 15,
+        transition: "left var(--t-base) var(--ease)",
         background: "var(--panel)",
         borderTop: "1px solid var(--line)",
         display: "flex",
@@ -103,6 +112,7 @@ export function TelemetryDock(props: TelemetryDockProps) {
           minWidth: 0,
           overflow: "hidden",
           transition: "height var(--t-base) var(--ease)",
+          willChange: "height",
         }}
       >
         {dock.expanded && width > 0 && (

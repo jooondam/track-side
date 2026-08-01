@@ -16,7 +16,9 @@ from pathlib import Path
 from offline.elevation.profile import load_elevation_profile
 from offline.geometry.pipeline import build_track
 from offline.mesh.gltf import write_glb
-from offline.mesh.ribbon import build_ribbon_mesh
+from offline.mesh.surfaces import build_track_primitives
+from offline.mesh.terrain import build_terrain_grid
+from offline.validation.checks import assert_apron_meets_terrain, assert_apron_slope_plausible
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -43,18 +45,32 @@ def main(argv: list[str] | None = None) -> int:
             gps_noise_std_m=args.gps_noise_std_m,
         )
         elevation = load_elevation_profile(args.elevation)
-        mesh = build_ribbon_mesh(track, elevation)
+        # terrain first: the apron's outer edge samples this exact grid, so it has to exist
+        # before the surfaces are built rather than being derived alongside them
+        terrain = build_terrain_grid(track, elevation.z_m)
+        primitives, materials, diagnostics = build_track_primitives(track, elevation, terrain)
+        assert_apron_meets_terrain(diagnostics["worst_terrain_gap_m"])
+        assert_apron_slope_plausible(diagnostics["worst_apron_slope"])
     except (AssertionError, ValueError) as exc:
         print(f"mesh build failed: {exc}", file=sys.stderr)
         return 1
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     output_path = args.out_dir / "track.glb"
-    write_glb(mesh, output_path)
+    write_glb(
+        primitives,
+        materials,
+        output_path,
+        scene_name=track.circuit_name,
+        node_name=f"{track.circuit_name} track surface",
+    )
 
     print(
-        f"{mesh.circuit_name}: {mesh.n_cross_sections} cross-sections, "
-        f"{len(mesh.vertices)} vertices, {len(mesh.triangles)} triangles -> {output_path} "
+        f"{track.circuit_name}: {diagnostics['total_triangles']} triangles across "
+        f"{len(primitives)} primitives (asphalt {diagnostics['asphalt_triangles']}, apron "
+        f"{diagnostics['cross_sections']} cross-sections), worst terrain gap "
+        f"{diagnostics['worst_terrain_gap_m']:.3f} m, worst apron slope "
+        f"{diagnostics['worst_apron_slope'] * 100:.0f}% -> {output_path} "
         f"({output_path.stat().st_size / 1024:.0f} KiB)"
     )
     return 0
