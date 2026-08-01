@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import monzaFixture from "./testdata/velocity_fixture_monza.json";
 import spaFixture from "./testdata/velocity_fixture_spa.json";
 import type { GT3Vehicle } from "./vehicle";
+import { CAP_ITERS, LOAD_TRANSFER_ITERS } from "./vehicle";
 import { PHASE_ACCEL, PHASE_BRAKE, VelocitySolver } from "./velocity";
 
 // mirrors offline/velocity/vehicle.py's DEFAULT_GT3; the fixture cases only vary mu
@@ -18,29 +19,77 @@ const BASE_VEHICLE: Omit<GT3Vehicle, "mu"> = {
   air_density_kgpm3: 1.225,
   g_mps2: 9.81,
   v_floor_mps: 2.0,
+  wheelbase_m: 2.65,
+  cg_height_m: 0.3,
+  weight_dist_front: 0.44,
+  brake_bias_front: 0.62,
+  tyre_load_sensitivity: 0.1,
+  aero_balance_front: 0.45,
+  fz_floor_frac: 0.02,
+  drive_axle: "rear",
 };
 
+// these bounds are the fixture's own quantisation floor with an order of magnitude of headroom
+// for last-ulp differences between Math.pow and numpy, not a judgement about how close is close
+// enough. the generator solves the identical rounded arrays the fixture ships, so the only
+// difference left is the rounding of the recorded answers: v_mps at 6 dp gives a 5e-7 half-ulp
+// and fz at 1 dp gives 0.05 N, and both are hit exactly. if either of these ever fires it is a
+// port divergence, because there is nothing else left in the budget for it to be.
+const V_TOLERANCE_MPS = 5e-6;
+const FZ_TOLERANCE_N = 0.5;
+
 interface Fixture {
+  meta: { load_transfer_iters: number; cap_iters: number };
   s_m: number[];
+  z_m: number[];
   kappa_1pm: number[];
-  cases: { mu: number; lap_time_s: number; v_mps: number[]; phase: string[] }[];
+  cases: {
+    mu: number;
+    lap_time_s: number;
+    v_mps: number[];
+    phase: string[];
+    fz_front_n: number[];
+    fz_rear_n: number[];
+  }[];
 }
 
 function checkFixture(name: string, fixture: Fixture) {
   describe(name, () => {
-    const solver = new VelocitySolver(fixture.s_m, fixture.kappa_1pm);
+    const solver = new VelocitySolver(fixture.s_m, fixture.kappa_1pm, fixture.z_m);
+
+    it("uses the same fixed-point iteration counts as the Python solver", () => {
+      // both counts are part of the model, not tuning knobs: a mismatch is a silent physics
+      // divergence that the 0.1 m/s tolerance below would mostly absorb
+      expect(LOAD_TRANSFER_ITERS).toBe(fixture.meta.load_transfer_iters);
+      expect(CAP_ITERS).toBe(fixture.meta.cap_iters);
+    });
 
     for (const testCase of fixture.cases) {
       it(`matches the Python solver at mu=${testCase.mu}`, () => {
         const result = solver.solve({ ...BASE_VEHICLE, mu: testCase.mu });
 
-        expect(Math.abs(result.lapTimeS - testCase.lap_time_s)).toBeLessThan(0.1);
+        expect(Math.abs(result.lapTimeS - testCase.lap_time_s)).toBeLessThan(1e-6);
 
         let maxError = 0;
         for (let i = 0; i < testCase.v_mps.length; i++) {
           maxError = Math.max(maxError, Math.abs(result.vMps[i] - testCase.v_mps[i]));
         }
-        expect(maxError).toBeLessThan(0.1);
+        expect(maxError).toBeLessThan(V_TOLERANCE_MPS);
+      });
+
+      it(`matches the Python axle loads at mu=${testCase.mu}`, () => {
+        // v(s) alone would not catch a sign error in the load transfer that happens to
+        // cancel inside the composed budget, which is exactly the bug this model can have.
+        // a genuine sign error is ~3000 N at peak braking, four orders clear of this bound.
+        const result = solver.solve({ ...BASE_VEHICLE, mu: testCase.mu });
+        let maxFront = 0;
+        let maxRear = 0;
+        for (let i = 0; i < testCase.fz_front_n.length; i++) {
+          maxFront = Math.max(maxFront, Math.abs(result.fzFrontN[i] - testCase.fz_front_n[i]));
+          maxRear = Math.max(maxRear, Math.abs(result.fzRearN[i] - testCase.fz_rear_n[i]));
+        }
+        expect(maxFront).toBeLessThan(FZ_TOLERANCE_N);
+        expect(maxRear).toBeLessThan(FZ_TOLERANCE_N);
       });
     }
 

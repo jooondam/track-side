@@ -91,7 +91,7 @@ function Viewer() {
   }, [circuitId]);
 
   const solver = useMemo(
-    () => (assets ? new VelocitySolver(assets.line.sM, assets.line.kappa1pm) : null),
+    () => (assets ? new VelocitySolver(assets.line.sM, assets.line.kappa1pm, assets.line.zM) : null),
     [assets],
   );
 
@@ -106,7 +106,10 @@ function Viewer() {
   // result buffers are reused across solves, so sharing one would alias the ghost's arrays onto
   // the live car's.
   const ghostSolver = useMemo(
-    () => (assets && ghostEnabled ? new VelocitySolver(assets.line.sM, assets.line.kappa1pm) : null),
+    () =>
+      assets && ghostEnabled
+        ? new VelocitySolver(assets.line.sM, assets.line.kappa1pm, assets.line.zM)
+        : null,
     [assets, ghostEnabled],
   );
   const ghostResult = useMemo(() => {
@@ -117,7 +120,7 @@ function Viewer() {
   useEffect(() => setSolveMs(measuredMs), [measuredMs]);
 
   const table = useMemo(
-    () => (assets && result ? buildLapTimeTable(assets.line.sM, result.vMps) : null),
+    () => (assets && result ? buildLapTimeTable(assets.line.sM, result.vMps, result.dlM) : null),
     [assets, result],
   );
 

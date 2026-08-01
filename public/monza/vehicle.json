@@ -6,5 +6,13 @@
   "power_w": 410000.0,
   "air_density_kgpm3": 1.225,
   "g_mps2": 9.81,
-  "v_floor_mps": 2.0
+  "v_floor_mps": 2.0,
+  "wheelbase_m": 2.65,
+  "cg_height_m": 0.3,
+  "weight_dist_front": 0.44,
+  "brake_bias_front": 0.62,
+  "tyre_load_sensitivity": 0.1,
+  "aero_balance_front": 0.45,
+  "fz_floor_frac": 0.02,
+  "drive_axle": "rear"
 }
