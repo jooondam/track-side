@@ -28,6 +28,68 @@ _RELAX_START_M = 150.0
 _RELAX_SPAN_M = 1050.0
 _HEIGHT_DECIMALS = 2
 
+# the steepest height change allowed between neighbouring cells, and how hard to work at it.
+#
+# This exists because of a specific artifact, not as general smoothing. The IDW takes the 12
+# nearest track points, but the track is sampled every metre, so all 12 come from the same 12 m
+# of road: the interpolation degenerates into *nearest section wins*. Out in the infield, where
+# two distant parts of the circuit are about equally far away, the boundary between their basins
+# is a cliff. At Spa the worst was 65 m between adjacent cells, where one side's nearest road was
+# s=4481 at z=9.9 and the other's was s=3117 at z=80.4.
+#
+# 6 m over a ~11 m cell is a 55% slope. Real terrain near this circuit runs to about 30%, so the
+# relaxation only ever touches the artifact: with this cap the height sampled at every track
+# point is unchanged to 0.07 m, exactly as it was before. Dropping the cap to 4 m starts moving
+# real ground, which is the signal that 6 is the right side of the line.
+_MAX_CELL_STEP_M = 6.0
+_CLIFF_RELAX_ITERS = 40
+_CLIFF_RELAX_RATE = 0.6
+# ground within this distance of the track is never relaxed: it is what the apron's outer edge
+# (32 m out) samples, and moving it is how a 14% roadside bank became a 49% one
+_ROADSIDE_PROTECT_M = 45.0
+
+
+def relax_cliffs(
+    heights: np.ndarray,
+    protect: np.ndarray | None = None,
+    max_step_m: float = _MAX_CELL_STEP_M,
+    iterations: int = _CLIFF_RELAX_ITERS,
+    rate: float = _CLIFF_RELAX_RATE,
+) -> np.ndarray:
+    """diffuse only the cells whose neighbours are impossibly far below or above them.
+
+    Deliberately not a blur. A blur would soften the whole landscape to remove a handful of
+    interpolation cliffs, and the thing that has to stay sharp is precisely the ground next to
+    the road, where the apron ties in. This touches a cell only while one of its four neighbours
+    is more than max_step_m away, so a real slope is left exactly as it was and only the
+    Voronoi ridges between basins are pulled down.
+
+    `protect` pins cells that must not move at all, whatever their neighbours are doing. The
+    roadside band uses it: at Spa only 2% of cliff cells sit within 40 m of the track, but the
+    apron's outer edge is at 32 m, so relaxing that band moved the ground the apron ties to and
+    turned a 14% roadside bank into a 49% one. Repairing the infield must not come out of the
+    accuracy of the metre of ground the road actually meets.
+    """
+    h = heights.copy()
+    for _ in range(iterations):
+        padded = np.pad(h, 1, mode="edge")
+        neighbours = (
+            padded[:-2, 1:-1],
+            padded[2:, 1:-1],
+            padded[1:-1, :-2],
+            padded[1:-1, 2:],
+        )
+        steep = np.zeros(h.shape, dtype=bool)
+        for neighbour in neighbours:
+            steep |= np.abs(neighbour - h) > max_step_m
+        if protect is not None:
+            steep &= ~protect
+        if not steep.any():
+            break
+        mean = sum(neighbours) / 4.0
+        h = np.where(steep, h + rate * (mean - h), h)
+    return h
+
 
 @dataclass(frozen=True)
 class TerrainGrid:
@@ -148,6 +210,9 @@ def build_terrain_grid(
 
     relax = np.clip((distances[:, 0] - _RELAX_START_M) / _RELAX_SPAN_M, 0.0, 1.0)
     heights = (1.0 - relax) * idw + relax * float(np.mean(z_m))
+    # the roadside band is the apron's tie-in, so it is exempt from the repair below
+    roadside = (distances[:, 0] < _ROADSIDE_PROTECT_M).reshape(n_cells, n_cells)
+    heights = relax_cliffs(heights.reshape(n_cells, n_cells), protect=roadside)
 
     return TerrainGrid(
         circuit_name=track.circuit_name,
@@ -156,5 +221,5 @@ def build_terrain_grid(
         z0=float(z0),
         dx=float((x1 - x0) / (n_cells - 1)),
         dz=float((z1 - z0) / (n_cells - 1)),
-        heights=np.round(heights.reshape(n_cells, n_cells), _HEIGHT_DECIMALS),
+        heights=np.round(heights, _HEIGHT_DECIMALS),
     )
