@@ -4,7 +4,7 @@
 // of the turn looking at the apex. "Show me Eau Rouge" costs one click and no new data.
 
 import type { LineData } from "../assets";
-import type { CornerLabel } from "../tracks";
+import type { Corner } from "../assets";
 
 export type ViewpointKind = "static" | "follow" | "chase";
 
@@ -34,7 +34,7 @@ function indexAtS(line: LineData, s: number): number {
  * The outside direction comes from the discrete acceleration of the path (the second difference
  * of position), which points at the centre of curvature; the camera goes the other way.
  */
-function cornerViewpoint(line: LineData, corner: CornerLabel, yScale: number): Viewpoint {
+function cornerViewpoint(line: LineData, corner: Corner, yScale: number): Viewpoint {
   const n = line.nPoints;
   const i = indexAtS(line, corner.sM);
   const prev = (i - 12 + n) % n;
@@ -72,7 +72,7 @@ function cornerViewpoint(line: LineData, corner: CornerLabel, yScale: number): V
 
 export function buildViewpoints(
   line: LineData,
-  corners: CornerLabel[],
+  corners: Corner[],
   center: readonly [number, number, number],
   extent: number,
   yScale: number,

@@ -10,13 +10,13 @@ import { Perf } from "r3f-perf";
 import * as THREE from "three";
 import type { CircuitAssets } from "../assets";
 import type { VelocityProfileResult } from "../solver/velocity";
-import type { TrackDefinition } from "../tracks";
 import { useTheme, useThemeTokens } from "../ui/theme";
 import { BrakingMarkers } from "./BrakingMarkers";
 import { CameraRig } from "./CameraRig";
 import { CarMarker, type LapProgress } from "./CarMarker";
 import { CornerLabels } from "./CornerLabels";
 import { Kerbs } from "./Kerbs";
+import { Landmarks } from "./Landmarks";
 import { RacingLine, type ColorMode } from "./RacingLine";
 import { TerrainMesh } from "./TerrainMesh";
 import { TrackMesh } from "./TrackMesh";
@@ -25,7 +25,6 @@ import type { Viewpoint } from "./viewpoints";
 
 interface SceneProps {
   assets: CircuitAssets;
-  trackDef: TrackDefinition;
   result: VelocityProfileResult;
   ghostResult: VelocityProfileResult | null;
   colorMode: ColorMode;
@@ -44,7 +43,6 @@ interface SceneProps {
 
 export function Scene({
   assets,
-  trackDef,
   result,
   ghostResult,
   colorMode,
@@ -175,6 +173,10 @@ export function Scene({
         <BrakingMarkers line={assets.line} result={result} />
       </group>
 
+      {/* trackside content, in its own group: it carries the same exaggeration scale but must
+          not inherit the track group's ordering, since the fence and boards are alpha-tested */}
+      <Landmarks assets={assets} exaggeration={exaggeration} />
+
       <CarMarker
         line={assets.line}
         result={result}
@@ -198,7 +200,7 @@ export function Scene({
       {/* drei <Html> labels are real DOM, so they draw over the hero overlay: suppressed
           while the landing is up rather than fighting it with z-index */}
       {!orbiting && (
-        <CornerLabels line={assets.line} corners={trackDef.corners} exaggeration={exaggeration} />
+        <CornerLabels line={assets.line} corners={assets.landmarks.corners} exaggeration={exaggeration} />
       )}
 
       <CameraRig
