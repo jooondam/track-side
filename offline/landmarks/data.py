@@ -33,8 +33,12 @@ from dataclasses import dataclass, field
 STRUCTURE_KINDS = frozenset(
     {
         "gantry",
-        "grandstand",
         "bridge",
+        # the generator exists and works, but no grandstand is authored on either circuit: the
+        # lateral offsets here are eyeballed, and at 26 to 34 m they put a stand between the
+        # corner cameras and the racing surface. Re-adding one needs a pass over the offsets
+        # against the real boundary, not another guess.
+        "grandstand",
         "pit_building",
         "banking_remnant",
         "tree_line",
@@ -121,16 +125,6 @@ SPA = CircuitLandmarks(
         Structure("kemmel_gantry", "gantry", s_m=2100, span_m=18.0, height_m=7.5),
         Structure("pit_building", "pit_building", s_m=250, offset_m=22.0, length_m=420.0,
                   height_m=11.0),
-        Structure("main_grandstand", "grandstand", s_m=300, offset_m=-30.0, length_m=180.0,
-                  height_m=14.0),
-        Structure("source_grandstand", "grandstand", s_m=430, offset_m=26.0, length_m=90.0,
-                  height_m=11.0),
-        Structure("raidillon_grandstand", "grandstand", s_m=1200, offset_m=-34.0,
-                  length_m=140.0, height_m=12.0),
-        Structure("combes_grandstand", "grandstand", s_m=2680, offset_m=30.0, length_m=110.0,
-                  height_m=11.0),
-        Structure("pouhon_grandstand", "grandstand", s_m=4130, offset_m=-32.0, length_m=95.0,
-                  height_m=10.0),
         Structure("bus_stop_bridge", "bridge", s_m=6700, span_m=22.0, height_m=9.0),
         Structure("kemmel_trees_left", "tree_line", s_m=1800, offset_m=-46.0, length_m=700.0),
         Structure("kemmel_trees_right", "tree_line", s_m=1800, offset_m=46.0, length_m=700.0),
@@ -166,14 +160,6 @@ MONZA = CircuitLandmarks(
         Structure("rettifilo_gantry", "gantry", s_m=500, span_m=20.0, height_m=8.0),
         Structure("pit_building", "pit_building", s_m=200, offset_m=24.0, length_m=380.0,
                   height_m=12.0),
-        Structure("main_grandstand", "grandstand", s_m=250, offset_m=-32.0, length_m=200.0,
-                  height_m=15.0),
-        Structure("rettifilo_grandstand", "grandstand", s_m=640, offset_m=28.0, length_m=120.0,
-                  height_m=12.0),
-        Structure("ascari_grandstand", "grandstand", s_m=4030, offset_m=-30.0, length_m=100.0,
-                  height_m=10.0),
-        Structure("parabolica_grandstand", "grandstand", s_m=5050, offset_m=34.0, length_m=160.0,
-                  height_m=13.0),
         Structure("serraglio_bridge", "bridge", s_m=3400, span_m=24.0, height_m=9.0),
         Structure("park_trees_north", "tree_line", s_m=2600, offset_m=-50.0, length_m=1200.0),
         Structure("park_trees_south", "tree_line", s_m=3600, offset_m=50.0, length_m=1400.0),
