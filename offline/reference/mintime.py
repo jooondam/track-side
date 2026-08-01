@@ -102,6 +102,7 @@ from pathlib import Path
 import casadi as ca
 import numpy as np
 
+from offline.elevation.profile import ElevationProfile, drape_elevation
 from offline.geometry.pipeline import TrackGeometry
 from offline.mincurv.qp import build_min_curv_qp, solve_lateral_offsets
 from offline.validation.checks import (
@@ -109,8 +110,14 @@ from offline.validation.checks import (
     assert_friction_circle_respected,
     assert_within_track_bounds,
 )
-from offline.velocity.solver import solve_velocity_profile
+from offline.velocity.solver import grade_channels, solve_velocity_profile
 from offline.velocity.vehicle import DEFAULT_GT3, GT3Vehicle
+
+# softening constant inside the fractional power of an axle load. IPOPT can step to an
+# infeasible negative Fz, and (-x)^0.9 is NaN; sqrt(Fz^2 + eps^2) is smooth, never negative,
+# and at eps = 1 mN it perturbs a 5.6 kN static load by about 1e-14 relative, which is five
+# orders below the rtol the Python cross-check test uses.
+FZ_SOFT_N = 1e-3
 
 
 @dataclass(frozen=True)
@@ -125,6 +132,7 @@ class _CoarseWarmStartGeometry:
     s_m: np.ndarray
     x_m: np.ndarray
     y_m: np.ndarray
+    z_m: np.ndarray
     kappa_1pm: np.ndarray
 
 _ACCEPTABLE_IPOPT_STATUSES = {"Solve_Succeeded", "Solved_To_Acceptable_Level"}
@@ -197,10 +205,58 @@ class MinTimeSolution:
         }
 
 
-def _ay_max_expr(v, vehicle: GT3Vehicle):
-    """CasADi-elementwise mirror of GT3Vehicle.ay_max_mps2. See module docstring."""
-    downforce_term = 0.5 * vehicle.air_density_kgpm3 * vehicle.downforce_area_m2 * v**2
-    return vehicle.mu * (vehicle.g_mps2 + downforce_term / vehicle.mass_kg)
+def _axle_loads_expr(v, vehicle: GT3Vehicle, ax_tyre=0.0, cos_theta=1.0, kappa_v=0.0):
+    """CasADi-elementwise mirror of GT3Vehicle.axle_loads_n, without the numerical floor.
+
+    the floor is a ca.fmax in the Python model and a pair of linear inequality constraints
+    here. that is not a style preference: fmax is non-smooth, and IPOPT handles a kink in a
+    constraint expression far worse than it handles two extra linear rows.
+    """
+    fz_norm = vehicle.mass_kg * (vehicle.g_mps2 * cos_theta + v * v * kappa_v)
+    fd = vehicle.downforce_coeff * v * v
+    d_fz = vehicle.transfer_coeff * ax_tyre
+    fz_front = vehicle.weight_dist_front * fz_norm - d_fz + vehicle.aero_balance_front * fd
+    fz_rear = (1.0 - vehicle.weight_dist_front) * fz_norm + d_fz + (
+        1.0 - vehicle.aero_balance_front
+    ) * fd
+    return fz_front, fz_rear
+
+
+def _axle_grip_expr(fz, fz0: float, vehicle: GT3Vehicle):
+    """CasADi-elementwise mirror of GT3Vehicle.axle_grip_n for one axle. See FZ_SOFT_N."""
+    grip_coeff = vehicle.mu * fz0**vehicle.tyre_load_sensitivity
+    fz_safe = ca.sqrt(fz * fz + FZ_SOFT_N * FZ_SOFT_N)
+    return grip_coeff * fz_safe ** (1.0 - vehicle.tyre_load_sensitivity)
+
+
+def _coarse_grade_channels(
+    track: TrackGeometry, coarse_s: np.ndarray, elevation: ElevationProfile | None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(sin_theta, cos_theta, kappa_v) on the NLP's coarse grid, one value per interval.
+
+    elevation=None gives a flat road: sin 0, cos 1, kappa_v 0, so every synthetic test in
+    test_mintime.py sees exactly the pre-M8 geometry and only the load-transfer change moves
+    its numbers.
+    """
+    if elevation is None:
+        m = len(coarse_s)
+        return np.zeros(m), np.ones(m), np.zeros(m)
+    s_closed = np.append(coarse_s, track.loop_length_m)
+    z_closed = drape_elevation(s_closed, track.loop_length_m, elevation)
+    sin_theta, cos_theta, _dl, kappa_v = grade_channels(s_closed, z_closed)
+    return sin_theta, cos_theta, kappa_v
+
+
+def _ay_max_expr(v, vehicle: GT3Vehicle, ax_tyre=0.0, cos_theta=1.0, kappa_v=0.0):
+    """CasADi-elementwise mirror of GT3Vehicle.ay_max_mps2. See module docstring.
+
+    defaults reproduce the flat, zero-longitudinal-force case exactly, which is what
+    test_casadi_physics_matches_vehicle_module compares against the Python model.
+    """
+    fz_front, fz_rear = _axle_loads_expr(v, vehicle, ax_tyre, cos_theta, kappa_v)
+    grip_front = _axle_grip_expr(fz_front, vehicle.fz0_front_n, vehicle)
+    grip_rear = _axle_grip_expr(fz_rear, vehicle.fz0_rear_n, vehicle)
+    return (grip_front + grip_rear) / vehicle.mass_kg
 
 
 def _ax_drag_expr(v, vehicle: GT3Vehicle):
@@ -243,6 +299,7 @@ def solve_mintime(
     max_iter: int = 3000,
     two_stage: bool = True,
     lap_time_tolerance: float = 0.01,
+    elevation: ElevationProfile | None = None,
 ) -> MinTimeSolution:
     """solve the minimum-time NLP on track and return a validated solution, or raise.
 
@@ -283,30 +340,64 @@ def solve_mintime(
     a_sparse_ca = ca.DM(a_sparse)
     kappa_ref_dm = ca.DM(kappa_ref)
 
+    sin_theta, cos_theta, kappa_v = _coarse_grade_channels(track, coarse_s, elevation)
+    sin_dm, cos_dm, kappa_v_dm = ca.DM(sin_theta), ca.DM(cos_theta), ca.DM(kappa_v)
+
     n = ca.MX.sym("n", m)
     v = ca.MX.sym("v", m)
     ax_tire = ca.MX.sym("ax_tire", m)
 
     kappa = kappa_ref_dm + a_sparse_ca @ n
     ay = v * v * kappa
-    ay_max = _ay_max_expr(v, vehicle)
     ax_drag = _ax_drag_expr(v, vehicle)
     ax_engine = _ax_engine_expr(v, vehicle)
-    ds_path = h * (1.0 - kappa_ref_dm * n)
+    # the planar element carries the standard Frenet correction; dividing by cos(theta) lifts
+    # it to the 3D path length the car actually travels. the lateral offset n does not change
+    # z, which is exactly what the flat cross-section assumption (#3) buys here.
+    ds_path = h * (1.0 - kappa_ref_dm * n) / cos_dm
 
     v_next = ca.vertcat(v[1:], v[0])
-    ax_net = ax_tire - ax_drag
+    ax_net = ax_tire - ax_drag - vehicle.g_mps2 * sin_dm
     g_dynamics = v_next * v_next - v * v - 2.0 * ax_net * ds_path
+
+    # the implicit Fz(ax) coupling that costs the sequential solver a three-step fixed point
+    # is free here: Fz is just an algebraic expression in the decision variable ax_tire and
+    # IPOPT resolves the coupling as part of the solve. that contrast is the whole reason for
+    # keeping the two implementations physically identical rather than documenting a divergence.
+    fz_front, fz_rear = _axle_loads_expr(v, vehicle, ax_tire, cos_dm, kappa_v_dm)
+    grip_front = _axle_grip_expr(fz_front, vehicle.fz0_front_n, vehicle)
+    grip_rear = _axle_grip_expr(fz_rear, vehicle.fz0_rear_n, vehicle)
+    ay_max = (grip_front + grip_rear) / vehicle.mass_kg
+
+    # ONE combined circle over the summed axle capacity, not one circle per axle.
+    #
+    # the per-axle version was built first and rejected on evidence. with the lateral demand
+    # split in proportion to axle grip, the two axle constraints reduce to the identical
+    # inequality whenever ax_tire is zero, which is exactly what happens at a steady cornering
+    # limit. two active constraints with parallel gradients violates LICQ, and IPOPT's inertia
+    # correction then grinds: every synthetic and real case hit Maximum_Iterations_Exceeded.
+    #
+    # the summed form is the same physics with brake bias left out, and leaving brake bias out
+    # of the reference is defensible in its own right: the fixed 0.62 bias in
+    # offline/velocity/solver.py can only ever reduce braking capacity relative to a bias that
+    # matches the instantaneous load split, so this NLP is the min-time an ideal driver with
+    # continuously adjusted bias would achieve. that makes it a valid upper bound on the
+    # sequential solver, and the gap between them is a measurable quantity rather than an
+    # unexplained discrepancy. registered as assumption #24.
     g_friction = ax_tire * ax_tire + ay * ay - ay_max * ay_max
     g_engine = ax_tire - ax_engine
+    # the axle-load floor, as two linear rows rather than a ca.fmax. see _axle_loads_expr.
+    g_fz_front = vehicle.fz_floor_n - fz_front
+    g_fz_rear = vehicle.fz_floor_n - fz_rear
 
     lap_time = ca.sum1(2.0 * ds_path / (v + v_next))
 
     z = ca.vertcat(n, v, ax_tire)
-    g = ca.vertcat(g_dynamics, g_friction, g_engine)
+    g = ca.vertcat(g_dynamics, g_friction, g_engine, g_fz_front, g_fz_rear)
 
-    lbg = np.concatenate([np.zeros(m), np.full(m, -np.inf), np.full(m, -np.inf)])
-    ubg = np.concatenate([np.zeros(m), np.zeros(m), np.zeros(m)])
+    n_inequality = 4
+    lbg = np.concatenate([np.zeros(m), np.full(n_inequality * m, -np.inf)])
+    ubg = np.zeros((1 + n_inequality) * m)
 
     v_top = vehicle.v_top_mps
     lbx = np.concatenate([lb, np.full(m, vehicle.v_floor_mps), np.full(m, -np.inf)])
@@ -317,17 +408,25 @@ def solve_mintime(
 
     s_closed = np.append(coarse_s, track.loop_length_m)
     kappa_closed = np.append(kappa0, kappa0[0])
+    z_closed = (
+        np.zeros(m + 1)
+        if elevation is None
+        else drape_elevation(s_closed, track.loop_length_m, elevation)
+    )
     warm_geometry = _CoarseWarmStartGeometry(
         circuit_name=track.circuit_name,
         source_path=track.source_path,
         s_m=s_closed,
         x_m=np.zeros(m + 1),
         y_m=np.zeros(m + 1),
+        z_m=z_closed,
         kappa_1pm=kappa_closed,
     )
     warm_profile = solve_velocity_profile(warm_geometry, vehicle)
     v0 = np.minimum(warm_profile.v_mps[:-1], v_top)
-    ax0 = warm_profile.ax_mps2[:-1] + vehicle.ax_drag_mps2(v0)
+    # ax_tire is the tyre's own contribution, so add back everything the net accel had to
+    # fight: drag, and now gravity along the road
+    ax0 = warm_profile.ax_mps2[:-1] + vehicle.ax_drag_mps2(v0) + vehicle.g_mps2 * sin_theta
     z0 = np.concatenate([n0, v0, ax0])
 
     opts = {
@@ -344,7 +443,7 @@ def solve_mintime(
         stage 1's sol["f"] is only ever the objective, not guaranteed identical to this
         formula's floating-point result once summed a different way.
         """
-        ds_path_arr = h * (1.0 - kappa_ref * n_arr)
+        ds_path_arr = h * (1.0 - kappa_ref * n_arr) / cos_theta
         v_next_arr = np.roll(v_arr, -1)
         return float(np.sum(2.0 * ds_path_arr / (v_arr + v_next_arr)))
 
@@ -388,7 +487,6 @@ def solve_mintime(
     n_opt, v_opt, ax_tire_opt = z_opt[:m], z_opt[m : 2 * m], z_opt[2 * m :]
     kappa_opt = kappa_ref + a_sparse @ n_opt
     ay_opt = v_opt**2 * kappa_opt
-    ay_max_opt = vehicle.ay_max_mps2(v_opt)
     lap_time_s = _lap_time_s(n_opt, v_opt)
 
     v_closed = np.append(v_opt, v_opt[0])
@@ -402,6 +500,11 @@ def solve_mintime(
     w_left_coarse = np.interp(coarse_s, track.s_m, track.w_tr_left_m)
     w_right_coarse = np.interp(coarse_s, track.s_m, track.w_tr_right_m)
     assert_within_track_bounds(n_opt, w_left_coarse, w_right_coarse, margin_m=0.0)
+
+    # evaluate ay_max at the SOLVED ax_tire, not at ax_tire = 0. by the Jensen argument in
+    # GT3Vehicle.ay_max_mps2 the zero-longitudinal case maximises total grip, so checking
+    # there would silently make this gate weaker than the constraint IPOPT actually solved.
+    ay_max_opt = vehicle.ay_max_mps2(v_opt, ax_tire_opt, sin_theta, cos_theta, kappa_v)
     assert_friction_circle_respected(ax_tire_opt, ay_opt, ay_max_opt)
 
     old_frac = track.s_m / track.loop_length_m

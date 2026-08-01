@@ -5,6 +5,10 @@ import type { GT3Vehicle } from "./solver/vehicle";
 export interface LineData {
   positionYup: Float32Array; // flat xyz, glTF Y-up frame, metres
   sM: Float64Array; // closed-duplicate arc length
+  // elevation, extracted from positionYup rather than shipped as its own array. duplicating
+  // it in line.json would cost ~60 KB per circuit and create two representations of the same
+  // number that can disagree, and since M8 the solver reads it as physics.
+  zM: Float64Array;
   kappa1pm: Float64Array;
   loopLengthM: number;
   nPoints: number;
@@ -46,6 +50,20 @@ function flattenXyz(rows: number[][]): Float32Array {
   return flat;
 }
 
+/**
+ * the glTF frame puts elevation in y, so z(s) is the middle component of each row.
+ *
+ * read from the JSON rows rather than from the Float32Array the renderer uses: the solver takes
+ * a second derivative of z to get vertical curvature, and float32 at 100 m is ~8e-6 m, which
+ * that derivative turns into a visible load error. positions are still float32 for the GPU;
+ * this is the same numbers at full width, not a second source of truth.
+ */
+function elevationFrom(rows: number[][]): Float64Array {
+  const z = new Float64Array(rows.length);
+  for (let i = 0; i < rows.length; i++) z[i] = rows[i][1];
+  return z;
+}
+
 async function fetchJson(url: string): Promise<any> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`failed to load ${url}: ${r.status}`);
@@ -61,10 +79,14 @@ export async function loadCircuitAssets(circuitId: string): Promise<CircuitAsset
     fetchJson(`${base}/vehicle.json`) as Promise<GT3Vehicle>,
   ]);
 
+  const lineRows = lineRaw.line.position_yup as number[][];
+  const linePositions = flattenXyz(lineRows);
+
   return {
     line: {
-      positionYup: flattenXyz(lineRaw.line.position_yup as number[][]),
+      positionYup: linePositions,
       sM: Float64Array.from(lineRaw.line.s_m as number[]),
+      zM: elevationFrom(lineRows),
       kappa1pm: Float64Array.from(lineRaw.line.kappa_1pm as number[]),
       loopLengthM: lineRaw.meta.loop_length_m as number,
       nPoints: lineRaw.meta.n_points as number,

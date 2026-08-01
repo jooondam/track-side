@@ -7,12 +7,23 @@ export interface LapTimeTable {
   lapTimeS: number;
 }
 
-export function buildLapTimeTable(sM: Float64Array, vMps: Float64Array): LapTimeTable {
+/**
+ * dlM is the solver's 3D segment length. pass it whenever the circuit has elevation: the
+ * planar ds understates the distance travelled by ~7 m at Spa, and integrating it here while
+ * the solver integrates dl leaves the car marker drifting out of sync with the lap time the
+ * HUD is showing. sAtTime and timeAtS still return planar s, which is what every consumer
+ * (corner positions, the scrubber, the elevation strip) expects.
+ */
+export function buildLapTimeTable(
+  sM: Float64Array,
+  vMps: Float64Array,
+  dlM?: Float64Array,
+): LapTimeTable {
   const n = sM.length;
   const cum = new Float64Array(n);
   for (let i = 1; i < n; i++) {
-    const ds = sM[i] - sM[i - 1];
-    cum[i] = cum[i - 1] + (2 * ds) / (vMps[i - 1] + vMps[i]);
+    const dl = dlM ? dlM[i - 1] : sM[i] - sM[i - 1];
+    cum[i] = cum[i - 1] + (2 * dl) / (vMps[i - 1] + vMps[i]);
   }
   return { cumTimeS: cum, lapTimeS: cum[n - 1] };
 }

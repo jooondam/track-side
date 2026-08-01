@@ -65,6 +65,7 @@ def assert_energy_balance(
     mass_kg: float,
     power_w: float,
     rel_tol: float = 0.02,
+    g_sin_theta_mps2: np.ndarray | float = 0.0,
 ) -> None:
     """raise if any point implies more propulsive power than the engine can deliver.
 
@@ -75,8 +76,12 @@ def assert_energy_balance(
     composed accel budget (friction circle + drag + engine cap) ever implies more power than
     the vehicle's engine can deliver -- net tire force is ax_mps2 + ax_drag_mps2 (drag always
     subtracts from realized accel, so adding it back isolates the tire's own contribution).
+
+    since M8 the road is graded, so gravity along the road has to be added back for the same
+    reason drag does: climbing Eau Rouge at constant speed is real engine work that the net
+    acceleration hides completely.
     """
-    ax_tire_net = ax_mps2 + ax_drag_mps2
+    ax_tire_net = ax_mps2 + ax_drag_mps2 + g_sin_theta_mps2
     power_used_w = mass_kg * ax_tire_net * v_mps
     violations = np.nonzero(power_used_w > power_w * (1.0 + rel_tol))[0]
     if violations.size > 0:
@@ -135,6 +140,94 @@ def assert_friction_circle_respected(
         raise AssertionError(
             f"friction circle violated at {violations.size} point(s); worst at index {worst} "
             f"(used={used[worst]:.3f} m/s2 > limit={ay_max_mps2[worst]:.3f} m/s2)"
+        )
+
+
+def assert_axle_circles_respected(
+    fx_front_n: np.ndarray,
+    fy_front_n: np.ndarray,
+    grip_front_n: np.ndarray,
+    fx_rear_n: np.ndarray,
+    fy_rear_n: np.ndarray,
+    grip_rear_n: np.ndarray,
+    rel_tol: float = 0.02,
+) -> None:
+    """raise if either axle's resultant tyre force exceeds that axle's grip capacity.
+
+    the M8 replacement for assert_friction_circle_respected. the single lumped circle is no
+    longer the constraint the solvers enforce: grip is per axle, and the per-axle circles only
+    collapse back onto the lumped one when brake bias happens to match the load split.
+    """
+    for name, fx, fy, grip in (
+        ("front", fx_front_n, fy_front_n, grip_front_n),
+        ("rear", fx_rear_n, fy_rear_n, grip_rear_n),
+    ):
+        used = np.hypot(fx, fy)
+        limit = grip * (1.0 + rel_tol)
+        violations = np.nonzero(used > limit)[0]
+        if violations.size > 0:
+            worst = violations[np.argmax(used[violations] - limit[violations])]
+            raise AssertionError(
+                f"{name} axle friction circle violated at {violations.size} point(s); worst "
+                f"at index {worst} (used={used[worst] / 1000:.2f} kN > "
+                f"capacity={grip[worst] / 1000:.2f} kN)"
+            )
+
+
+def assert_axle_loads_sum(
+    fz_front_n: np.ndarray,
+    fz_rear_n: np.ndarray,
+    fz_expected_n: np.ndarray,
+    tol_n: float = 1.0,
+) -> None:
+    """raise if the axle loads do not sum to the total normal load.
+
+    load transfer is internal: it moves load between axles, it never creates or destroys any.
+    catches a sign error or a dropped term in the transfer far more directly than any
+    downstream lap-time comparison can. only meaningful where the numerical Fz floor has not
+    fired, so points at the floor are excluded rather than silently widening the tolerance.
+    """
+    residual = np.abs(fz_front_n + fz_rear_n - fz_expected_n)
+    at_floor = (fz_front_n <= np.min(fz_front_n) + 1e-9) | (
+        fz_rear_n <= np.min(fz_rear_n) + 1e-9
+    )
+    checked = residual[~at_floor] if np.any(~at_floor) else residual
+    if checked.size and float(np.max(checked)) > tol_n:
+        raise AssertionError(
+            f"axle loads do not sum to the total normal load: worst residual "
+            f"{float(np.max(checked)):.3f} N exceeds {tol_n} N"
+        )
+
+
+def assert_gravity_work_closes(
+    sin_theta: np.ndarray, dl_m: np.ndarray, tol_m: float = 1e-6
+) -> None:
+    """raise if the elevation gained around a lap does not equal the elevation lost.
+
+    sin(theta)*dl is dz by construction, so this is a gate on the geometry rather than on the
+    solver: it fires when z has been sampled onto a different grid than s, or when a drape has
+    left a seam at the start line. it matters because grade entered the physics at M8, and a
+    residual here is a net energy injection per lap that stops v(0) == v(L) converging.
+    """
+    net_climb_m = abs(float(np.sum(sin_theta * dl_m)))
+    if net_climb_m > tol_m:
+        raise AssertionError(
+            f"gravity does not close around the lap: net climb {net_climb_m:.3e} m exceeds "
+            f"{tol_m:.1e} m; the velocity profile will not converge on a closed loop"
+        )
+
+
+def assert_grade_plausible(grade_rad: np.ndarray, max_grade_frac: float = 0.25) -> None:
+    """raise if any road gradient exceeds a plausible circuit slope.
+
+    Eau Rouge, the steepest thing in the current circuit set, runs about 17%. anything past
+    25% is a resampling artifact or a bad registration, not a road.
+    """
+    worst = float(np.max(np.abs(np.tan(grade_rad))))
+    if worst > max_grade_frac:
+        raise AssertionError(
+            f"implausible road gradient: {worst * 100:.1f}% exceeds "
+            f"{max_grade_frac * 100:.0f}%; check the elevation drape and the s grid"
         )
 
 

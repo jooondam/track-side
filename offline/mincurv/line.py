@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 from scipy.interpolate import splev
 
+from offline.elevation.profile import ElevationProfile, drape_elevation
 from offline.geometry.curvature import curvature_from_derivatives
 from offline.geometry.pipeline import TrackGeometry
 from offline.geometry.resample import resample_by_arc_length
@@ -37,6 +38,7 @@ class OptimizedLine:
     s_m: np.ndarray
     x_m: np.ndarray
     y_m: np.ndarray
+    z_m: np.ndarray
     heading_rad: np.ndarray
     kappa_1pm: np.ndarray
     lateral_offset_m: np.ndarray
@@ -65,6 +67,7 @@ class OptimizedLine:
                 "s_m": self.s_m.tolist(),
                 "x_m": self.x_m.tolist(),
                 "y_m": self.y_m.tolist(),
+                "z_m": self.z_m.tolist(),
                 "heading_rad": self.heading_rad.tolist(),
                 "kappa_1pm": self.kappa_1pm.tolist(),
                 "lateral_offset_m": self.lateral_offset_m.tolist(),
@@ -79,12 +82,18 @@ def build_line_from_offsets(
     margin_m: float = 1.0,
     spacing_m: float = 1.0,
     loop_closure_tol_m: float = 1e-3,
+    elevation: ElevationProfile | None = None,
 ) -> OptimizedLine:
     """turn a full-resolution solved lateral-offset array alpha(s) into a validated racing line.
 
     shared by every offset solver (minimum-curvature, shortest-path, grip-weighted blend) --
     hard gates (assert_loop_closes, assert_within_track_bounds) run before the result is
     returned, a failing solve must never produce output that looks successful.
+
+    elevation, when given, is draped onto the refit arc length here rather than by the caller.
+    that used to happen in build_viewer_assets.py, which meant the line the solver ran on and
+    the line the viewer drew got their z from two places; since M8 made grade part of the
+    physics they have to be the same array, so the drape lives here now.
     """
     normal_x = -np.sin(track.heading_rad)
     normal_y = np.cos(track.heading_rad)
@@ -123,6 +132,12 @@ def build_line_from_offsets(
 
     assert_within_track_bounds(lateral_offset_m, w_left_new, w_right_new, margin_m=0.0)
 
+    z_m = (
+        np.zeros_like(s_m)
+        if elevation is None
+        else drape_elevation(s_m, float(s_m[-1]), elevation)
+    )
+
     return OptimizedLine(
         circuit_name=track.circuit_name,
         source_path=track.source_path,
@@ -132,6 +147,7 @@ def build_line_from_offsets(
         s_m=s_m,
         x_m=centerline[:, 0],
         y_m=centerline[:, 1],
+        z_m=z_m,
         heading_rad=heading_rad,
         kappa_1pm=kappa,
         lateral_offset_m=lateral_offset_m,
@@ -144,6 +160,7 @@ def build_mincurv_line(
     spacing_m: float = 1.0,
     loop_closure_tol_m: float = 1e-3,
     qp_spacing_m: float = 5.0,
+    elevation: ElevationProfile | None = None,
 ) -> OptimizedLine:
     """solve the minimum-curvature QP on track and return a validated racing line, or raise."""
     alpha = solve_lateral_offsets(track, margin_m, qp_spacing_m)
@@ -154,4 +171,5 @@ def build_mincurv_line(
         margin_m=margin_m,
         spacing_m=spacing_m,
         loop_closure_tol_m=loop_closure_tol_m,
+        elevation=elevation,
     )

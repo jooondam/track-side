@@ -31,6 +31,7 @@ class RacelineGeometry:
     s_m: np.ndarray
     x_m: np.ndarray
     y_m: np.ndarray
+    z_m: np.ndarray
     heading_rad: np.ndarray
     kappa_1pm: np.ndarray
 
@@ -90,6 +91,9 @@ def build_raceline_geometry(
         s_m=s_m,
         x_m=centerline[:, 0],
         y_m=centerline[:, 1],
+        # a bare TUMFTM raceline CSV carries no elevation column, so this geometry is flat by
+        # construction. drape a real profile onto it with drape_elevation() if you have one.
+        z_m=np.zeros_like(s_m),
         heading_rad=heading_rad,
         kappa_1pm=kappa,
     )

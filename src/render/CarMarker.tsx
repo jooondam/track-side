@@ -74,7 +74,10 @@ export function CarMarker({
   const rollRef = useRef(0);
   const tokens = useThemeTokens();
 
-  const table = useMemo(() => buildLapTimeTable(line.sM, result.vMps), [line, result]);
+  const table = useMemo(
+    () => buildLapTimeTable(line.sM, result.vMps, result.dlM),
+    [line, result],
+  );
 
   // scrub requests apply even while a different result is animating (table changes reset
   // nothing: sRef survives solver updates so the car doesn't teleport on slider drags).

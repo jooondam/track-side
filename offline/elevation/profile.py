@@ -160,3 +160,34 @@ def load_elevation_profile(json_path: Path) -> ElevationProfile:
         s_m=np.array(payload["profile"]["s_m"]),
         z_m=np.array(payload["profile"]["z_m"]),
     )
+
+
+def drape_elevation(
+    s_m: np.ndarray, loop_length_m: float, elevation: ElevationProfile
+) -> np.ndarray:
+    """sample an elevation profile onto another arc-length grid by fractional loop position.
+
+    a refit racing line has a slightly different arc-length parametrization than the
+    centerline the profile was built on (5784.44 m vs 5789.84 m at Monza), so matching by
+    fraction around the loop rather than by raw s is the same approximation
+    build_line_from_offsets already makes for track widths. both grids describe the same
+    physical circuit, so the fractional map is exact at every landmark and only redistributes
+    the metre-scale spacing between them.
+
+    the loop-closure gate matters more than it looks. M8 made grade part of the physics, and
+    the forward and backward passes only agree if the elevation gained around a lap is exactly
+    the elevation lost. a residual here shows up as an energy leak that stops v(0) == v(L) from
+    converging, so the closure is asserted and then enforced exactly rather than trusted.
+    """
+    line_frac = s_m / loop_length_m
+    profile_frac = elevation.s_m / elevation.s_m[-1]
+    z_m = np.interp(line_frac, profile_frac, elevation.z_m, period=1.0)
+
+    closure_gap = abs(float(z_m[-1] - z_m[0]))
+    if closure_gap > 1e-6:
+        raise AssertionError(
+            f"elevation does not close around the loop: z[-1] - z[0] = {closure_gap:.3e} m. "
+            "grade would inject net energy per lap and the velocity profile would not converge"
+        )
+    z_m[-1] = z_m[0]
+    return z_m

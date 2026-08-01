@@ -23,6 +23,7 @@ def _circle_geometry(radius: float, n: int = 200) -> RacelineGeometry:
         s_m=radius * theta,
         x_m=radius * np.cos(theta),
         y_m=radius * np.sin(theta),
+        z_m=np.zeros(n + 1),
         heading_rad=theta + np.pi / 2,
         kappa_1pm=np.full(n + 1, 1.0 / radius),
     )
@@ -60,6 +61,7 @@ def _stadium_geometry(radius: float, straight_length: float, spacing: float = 1.
         s_m=s,
         x_m=x,
         y_m=y,
+        z_m=np.zeros_like(s),
         heading_rad=heading,
         kappa_1pm=kappa,
     )

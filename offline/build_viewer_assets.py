@@ -43,8 +43,8 @@ from scipy.spatial import cKDTree
 from offline.elevation.profile import load_elevation_profile
 from offline.geometry.pipeline import build_track
 from offline.mincurv.line import build_mincurv_line
-from offline.velocity.solver import solve_velocity_profile
-from offline.velocity.vehicle import DEFAULT_GT3, GT3Vehicle
+from offline.velocity.solver import solve_velocity_profile, vehicle_to_json_dict
+from offline.velocity.vehicle import CAP_ITERS, DEFAULT_GT3, LOAD_TRANSFER_ITERS
 
 
 def _to_yup(x_m: np.ndarray, y_m: np.ndarray, z_m: np.ndarray) -> np.ndarray:
@@ -132,19 +132,31 @@ def main(argv: list[str] | None = None) -> int:
             spacing_m=args.spacing_m,
             gps_noise_std_m=args.gps_noise_std_m,
         )
-        line = build_mincurv_line(track, margin_m=args.margin_m, spacing_m=args.spacing_m)
         elevation = load_elevation_profile(args.elevation)
+        # the drape lives inside build_line_from_offsets since M8, so the z the solver runs
+        # its grade on and the z the viewer draws are the same array by construction
+        line = build_mincurv_line(
+            track, margin_m=args.margin_m, spacing_m=args.spacing_m, elevation=elevation
+        )
     except (AssertionError, ValueError) as exc:
         print(f"asset build failed: {exc}", file=sys.stderr)
         return 1
 
-    # drape elevation onto the line by fractional loop position
-    line_frac = line.s_m / line.loop_length_m
-    track_frac = elevation.s_m / elevation.s_m[-1]
-    z_line = np.interp(line_frac, track_frac, elevation.z_m, period=1.0)
-
     # glTF Y-up frame, matching offline/mesh/gltf.py's rotation exactly: (x, y, z) -> (x, z, -y)
-    position_yup = _to_yup(line.x_m, line.y_m, z_line)
+    position_yup = _to_yup(line.x_m, line.y_m, line.z_m).round(4)
+
+    # the geometry the viewer actually solves on, which is the rounded geometry this script
+    # writes, not the full-precision line it holds in memory. the viewer reads z back out of
+    # position_yup, so the fixture takes its z from that same array.
+    #
+    # this matters because kappa_v is a second derivative of z: 1e-4 m of rounding is ~1e-7 on
+    # the grade and utterly invisible in v(s), but it lands as ~80 N on the axle loads. solving
+    # the fixture from the full-precision line would bake that difference into the expected
+    # values and force the cross-language test to widen past the point where it could still
+    # catch a real transfer error.
+    shipped = dataclasses.replace(
+        line, s_m=line.s_m.round(4), z_m=np.ascontiguousarray(position_yup[:, 1])
+    )
 
     out_dir = args.public_dir / args.circuit.lower()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -196,30 +208,17 @@ def main(argv: list[str] | None = None) -> int:
                     "frame": "gltf Y-up, metres; same rotation as track.glb",
                 },
                 "line": {
-                    "position_yup": position_yup.round(4).tolist(),
-                    "s_m": line.s_m.round(4).tolist(),
-                    "kappa_1pm": line.kappa_1pm.tolist(),
+                    "position_yup": position_yup.tolist(),
+                    "s_m": shipped.s_m.tolist(),
+                    "kappa_1pm": shipped.kappa_1pm.tolist(),
                 },
             },
             separators=(",", ":"),
         )
     )
 
-    v = DEFAULT_GT3
     (out_dir / "vehicle.json").write_text(
-        json.dumps(
-            {
-                "mass_kg": v.mass_kg,
-                "mu": v.mu,
-                "downforce_area_m2": v.downforce_area_m2,
-                "drag_area_m2": v.drag_area_m2,
-                "power_w": v.power_w,
-                "air_density_kgpm3": v.air_density_kgpm3,
-                "g_mps2": v.g_mps2,
-                "v_floor_mps": v.v_floor_mps,
-            },
-            indent=2,
-        )
+        json.dumps(vehicle_to_json_dict(DEFAULT_GT3), indent=2)
     )
 
     try:
@@ -230,13 +229,18 @@ def main(argv: list[str] | None = None) -> int:
 
     fixtures = []
     for mu in mu_grid:
-        profile = solve_velocity_profile(line, dataclasses.replace(DEFAULT_GT3, mu=mu))
+        profile = solve_velocity_profile(shipped, dataclasses.replace(DEFAULT_GT3, mu=mu))
         fixtures.append(
             {
                 "mu": mu,
                 "lap_time_s": profile.lap_time_s,
                 "v_mps": profile.v_mps.round(6).tolist(),
                 "phase": profile.phase.tolist(),
+                # axle loads validate the M8 load model directly. without them the TS port is
+                # only checked through v(s), where a transfer sign error that happens to
+                # cancel inside the composed budget would pass unnoticed.
+                "fz_front_n": profile.fz_front_n.round(1).tolist(),
+                "fz_rear_n": profile.fz_rear_n.round(1).tolist(),
             }
         )
         print(f"fixture mu={mu:g}: lap time {profile.lap_time_s:.2f} s")
@@ -249,9 +253,16 @@ def main(argv: list[str] | None = None) -> int:
                     "circuit_name": line.circuit_name,
                     "generator": "offline/build_viewer_assets.py, offline/velocity/solver.py",
                     "note": "cross-validation target for src/solver/velocity.ts",
+                    # the two fixed-point counts are part of the model, so the TS port has to
+                    # use the same values. velocity.test.ts asserts its constants match these.
+                    "load_transfer_iters": LOAD_TRANSFER_ITERS,
+                    "cap_iters": CAP_ITERS,
                 },
-                "s_m": line.s_m.round(4).tolist(),
-                "kappa_1pm": line.kappa_1pm.tolist(),
+                # byte-identical to what line.json ships, and what the cases below were solved
+                # from, so any residual difference the TS port shows is the port and nothing else
+                "s_m": shipped.s_m.tolist(),
+                "z_m": shipped.z_m.tolist(),
+                "kappa_1pm": shipped.kappa_1pm.tolist(),
                 "cases": fixtures,
             },
             separators=(",", ":"),
