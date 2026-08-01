@@ -3,6 +3,7 @@
 // the whole composition rather than just the panels. Elevation exaggeration is applied as a Y
 // scale on the track group; car markers and labels compensate internally.
 
+import { Environment, Lightformer, Sky } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useMemo } from "react";
 import { Perf } from "r3f-perf";
@@ -10,14 +11,14 @@ import * as THREE from "three";
 import type { CircuitAssets } from "../assets";
 import type { VelocityProfileResult } from "../solver/velocity";
 import type { TrackDefinition } from "../tracks";
-import { useThemeTokens } from "../ui/theme";
+import { useTheme, useThemeTokens } from "../ui/theme";
 import { BrakingMarkers } from "./BrakingMarkers";
 import { CameraRig } from "./CameraRig";
 import { CarMarker, type LapProgress } from "./CarMarker";
 import { CornerLabels } from "./CornerLabels";
 import { Kerbs } from "./Kerbs";
 import { RacingLine, type ColorMode } from "./RacingLine";
-import { TerrainGrid } from "./TerrainGrid";
+import { TerrainMesh } from "./TerrainMesh";
 import { TrackMesh } from "./TrackMesh";
 import { TrackOutline } from "./TrackOutline";
 import type { Viewpoint } from "./viewpoints";
@@ -60,6 +61,15 @@ export function Scene({
   onUserTakeover,
 }: SceneProps) {
   const tokens = useThemeTokens();
+  const { theme } = useTheme();
+
+  // one sun vector drives the sky, the image-based lighting and the key light, so the shading
+  // and the sky agree instead of being tuned against each other. Low and raking in the dark
+  // theme, high and near-overhead in the light one.
+  const sun = useMemo<[number, number, number]>(
+    () => (theme === "dark" ? [0.6, 0.12, -0.35] : [0.35, 0.85, -0.28]),
+    [theme],
+  );
 
   const { center, extent } = useMemo(() => {
     const p = assets.line.positionYup;
@@ -95,16 +105,44 @@ export function Scene({
         gl.outputColorSpace = THREE.SRGBColorSpace;
       }}
     >
-      <color attach="background" args={[tokens.sceneBg]} />
-      {/* fog pushed well out: at extent*1.2 it swallowed the track colours the moment the camera
-          pulled back. Depth cueing comes from the terrain dots instead. */}
-      <fog attach="fog" args={[tokens.sceneFog, extent * 3, extent * 8]} />
+      {/* a procedural Preetham sky, not a flat clear colour. drei's <Sky> generates its own
+          gradient in a shader, so unlike <Environment preset> it fetches nothing from a CDN and
+          the viewer stays offline-safe. The theme toggle now means something physical: a low sun
+          at dusk against a high midday one, rather than two background swatches. */}
+      {/* distance must sit inside the camera's far plane. drei defaults it to 450000, which on a
+          circuit-scaled camera (far = extent*12, about 84 km at Spa) puts the whole sky dome
+          behind the far plane and clips it away to the clear colour. */}
+      <Sky
+        distance={extent * 6}
+        sunPosition={sun}
+        turbidity={theme === "dark" ? 8 : 3}
+        rayleigh={theme === "dark" ? 3 : 1}
+      />
+
+      {/* fog pulled in hard, from extent*3..8 to extent*0.6..2.5. At the old range it never
+          engaged at all, which is what left the circuit reading as an object floating on graph
+          paper; at this range it is what dissolves the terrain grid's hard square edge into the
+          sky. The colour tracks the sky's horizon rather than the panel token, or the haze reads
+          as a grey wall in front of a blue sky. */}
+      <fog attach="fog" args={[tokens.sceneFog, extent * 0.6, extent * 2.5]} />
+
+      {/* renders once (frames={1}) into a 128px cube, so it costs about a millisecond at mount
+          and nothing per frame. This is what makes the car's paint read as paint: three area
+          lights standing in for sky, ground bounce and the sun. */}
+      <Environment frames={1} resolution={128}>
+        <Lightformer form="rect" intensity={theme === "dark" ? 0.6 : 1.4} scale={[100, 100, 1]}
+          position={[0, 60, 0]} rotation={[-Math.PI / 2, 0, 0]} color={tokens.lightHemiSky} />
+        <Lightformer form="rect" intensity={0.35} scale={[100, 100, 1]}
+          position={[0, -40, 0]} rotation={[Math.PI / 2, 0, 0]} color={tokens.lightHemiGround} />
+        <Lightformer form="circle" intensity={theme === "dark" ? 2.0 : 3.2} scale={[24, 24, 1]}
+          position={[sun[0] * 0.1, sun[1] * 0.1, sun[2] * 0.1]} target={[0, 0, 0]} />
+      </Environment>
 
       <hemisphereLight
         args={[tokens.lightHemiSky, tokens.lightHemiGround, tokens.lightHemi]}
       />
       <directionalLight
-        position={[center[0] + 600, 900, center[2] - 400]}
+        position={[center[0] + sun[0] * 900, sun[1] * 900, center[2] + sun[2] * 900]}
         intensity={tokens.lightKey}
       />
       {/* rim fill from the opposite side so the car and the kerbs keep an edge against the
@@ -115,10 +153,10 @@ export function Scene({
         color={tokens.lightHemiSky}
       />
 
-      {/* the terrain dot field is the only ground reference. A drei <Grid> used to sit under it
-          and read as a second, competing square plane, which is what made the overview shot look
-          like a circuit floating on graph paper. */}
-      <TerrainGrid terrain={assets.terrain} exaggeration={exaggeration} />
+      {/* the ground. A displaced heightfield rather than the dot field it replaces: the dots
+          faded out below 60 m of camera altitude, so from the chase shot there was no ground at
+          all. Same terrain.json, one draw call, visible at every altitude. */}
+      <TerrainMesh terrain={assets.terrain} exaggeration={exaggeration} />
 
       {/* the outline loads from JSON well before the GLB, so it stands in as the suspense
           fallback: the circuit draws itself progressively instead of popping in whole */}
