@@ -44,7 +44,7 @@ export function TrackMesh({ url }: { url: string }) {
     // the asphalt it is supposed to frame. A muted olive keeps it continuous with the terrain and
     // lets the road stay the darkest, most legible thing on screen.
     const apron = new THREE.MeshStandardMaterial({
-      color: "#93937c",
+      color: "#5c5c4d",
       roughness: 0.99,
       metalness: 0,
       roughnessMap: grassRoughness(),
