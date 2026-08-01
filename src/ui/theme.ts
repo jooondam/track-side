@@ -47,9 +47,14 @@ export interface ThemeTokens {
   carBody: string;
   carCarbon: string;
   carGlass: string;
-  // phase palette. Deliberately blue/amber/grey rather than the red/green it replaces:
+  // phase palette. Deliberately a cyan/amber axis rather than the red/green it replaces:
   // red-green is the axis lost in deuteranopia and protanopia, which together affect roughly
   // 8% of men, and reading the phase colouring is the entire job of this tool.
+  //
+  // warm is braking, not accelerating. that is the opposite of the traffic-light instinct but
+  // it matches the only heat the scene actually models: the car's own brake discs already glow
+  // brakeGlow under load. coast sits at low chroma so it recedes, leaving the line reading as
+  // two active phases separated by gaps rather than three competing bands.
   phaseAccel: string;
   phaseBrake: string;
   phaseCoast: string;
@@ -88,9 +93,9 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     carBody: "#ff5c1a",
     carCarbon: "#15171d",
     carGlass: "#0c1218",
-    phaseAccel: "#ffc233",
-    phaseBrake: "#3b9dff",
-    phaseCoast: "#8b90a0",
+    phaseAccel: "#39d0ff",
+    phaseBrake: "#ff9e2c",
+    phaseCoast: "#5d6472",
     lightKey: 1.5,
     lightHemiSky: "#2a3040",
     lightHemiGround: "#0b0d12",
@@ -123,9 +128,9 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     carBody: "#d92e14",
     carCarbon: "#2a2d34",
     carGlass: "#4a5560",
-    phaseAccel: "#c07800",
-    phaseBrake: "#0b6fd0",
-    phaseCoast: "#767e8e",
+    phaseAccel: "#067ea6",
+    phaseBrake: "#c2610a",
+    phaseCoast: "#737a88",
     lightKey: 1.2,
     lightHemiSky: "#f2f4f8",
     lightHemiGround: "#8c8f96",
