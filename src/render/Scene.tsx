@@ -3,7 +3,7 @@
 // the whole composition rather than just the panels. Elevation exaggeration is applied as a Y
 // scale on the track group; car markers and labels compensate internally.
 
-import { Environment, Lightformer, Sky } from "@react-three/drei";
+import { Environment, Lightformer } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useMemo } from "react";
 import { Perf } from "r3f-perf";
@@ -18,6 +18,7 @@ import { CornerLabels } from "./CornerLabels";
 import { Kerbs } from "./Kerbs";
 import { Landmarks } from "./Landmarks";
 import { RacingLine, type ColorMode } from "./RacingLine";
+import { SkyDome } from "./SkyDome";
 import { TerrainMesh } from "./TerrainMesh";
 import { TrackMesh } from "./TrackMesh";
 import { TrackOutline } from "./TrackOutline";
@@ -103,26 +104,22 @@ export function Scene({
         gl.outputColorSpace = THREE.SRGBColorSpace;
       }}
     >
-      {/* a procedural Preetham sky, not a flat clear colour. drei's <Sky> generates its own
-          gradient in a shader, so unlike <Environment preset> it fetches nothing from a CDN and
-          the viewer stays offline-safe. The theme toggle now means something physical: a low sun
-          at dusk against a high midday one, rather than two background swatches. */}
-      {/* distance must sit inside the camera's far plane. drei defaults it to 450000, which on a
-          circuit-scaled camera (far = extent*12, about 84 km at Spa) puts the whole sky dome
-          behind the far plane and clips it away to the clear colour. */}
-      <Sky
-        distance={extent * 6}
-        sunPosition={sun}
-        turbidity={theme === "dark" ? 8 : 3}
-        rayleigh={theme === "dark" ? 3 : 1}
-      />
+      {/* a floor behind the dome. If SkyDome ever fails to compile or is suspended, this is
+          what shows, and it is the horizon rather than the browser's default white. */}
+      <color attach="background" args={[tokens.sceneBg]} />
+      <SkyDome sun={sun} extent={extent} reducedMotion={reducedMotion} />
 
-      {/* fog pulled in hard, from extent*3..8 to extent*0.6..2.5. At the old range it never
-          engaged at all, which is what left the circuit reading as an object floating on graph
-          paper; at this range it is what dissolves the terrain grid's hard square edge into the
-          sky. The colour tracks the sky's horizon rather than the panel token, or the haze reads
-          as a grey wall in front of a blue sky. */}
-      <fog attach="fog" args={[tokens.sceneFog, extent * 0.6, extent * 2.5]} />
+      {/* fogExp2, not linear. Linear fog has a start distance, and the terrain's far edge kept
+          finding its way inside it; exponential-squared has no near plane and saturates
+          smoothly, which is what reaching to infinity actually looks like. Density is derived
+          from the circuit's own extent so Spa (2049 m) and Monza (2174 m) haze identically
+          rather than one of them being tuned and the other inheriting it.
+
+          The colour is tokens.sceneFog, which is also the sky dome's horizon band and also what
+          the terrain occluder converges to. One value, three consumers, no way to disagree --
+          the previous comment here claimed the fog tracked the sky's horizon, but the token it
+          used was near-black while the sky was near-white. */}
+      <fogExp2 attach="fog" args={[tokens.sceneFog, tokens.fogDensityK / extent]} />
 
       {/* renders once (frames={1}) into a 128px cube, so it costs about a millisecond at mount
           and nothing per frame. This is what makes the car's paint read as paint: three area
@@ -154,7 +151,11 @@ export function Scene({
       {/* the ground. A displaced heightfield rather than the dot field it replaces: the dots
           faded out below 60 m of camera altitude, so from the chase shot there was no ground at
           all. Same terrain.json, one draw call, visible at every altitude. */}
-      <TerrainMesh terrain={assets.terrain} exaggeration={exaggeration} />
+      <TerrainMesh
+        terrain={assets.terrain}
+        exaggeration={exaggeration}
+        reducedMotion={reducedMotion}
+      />
 
       {/* the outline loads from JSON well before the GLB, so it stands in as the suspense
           fallback: the circuit draws itself progressively instead of popping in whole */}

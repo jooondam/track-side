@@ -36,6 +36,10 @@ export interface ThemeTokens {
   neg: string;
   // scene
   sceneBg: string;
+  /** the horizon, and the only definition of it. Three consumers that must never disagree: the
+   *  exponential fog's colour, the sky dome's horizon band, and the whole below-horizon half of
+   *  that dome. Fully fogged geometry lands on exactly this value, so the finite terrain plate's
+   *  far edge is the same colour as the sky it ends against and its silhouette is unfindable. */
   sceneFog: string;
   asphalt: string;
   edge: string;
@@ -44,6 +48,28 @@ export interface ThemeTokens {
   terrainLo: string;
   terrainMid: string;
   terrainHi: string;
+  /** multiplier on the terrain ramp. The point-and-wire layers want more punch than a shaded
+   *  surface does; the light theme goes the other way and sits darker than the ground. */
+  terrainGlow: number;
+  // sky dome. One shader for both themes, so the only difference between a night sky and a day
+  // sky is these values. drei's <Sky> could not do this: it is the Preetham *daylight* model and
+  // has no night mode at all, which is why dark theme used to render a near-white sky.
+  skyZenith: string;
+  skySun: string;
+  skySunIntensity: number;
+  /** pow() exponent on the vertical ramp. Below 1 it compresses toward the horizon, so most of
+   *  the dome is zenith colour and the variation lives in the last few degrees. A linear ramp
+   *  puts the midtone at 45 degrees, which reads as a painted backdrop rather than as air. */
+  skyHorizonSharp: number;
+  /** star brightness. 0 removes the field entirely, which is the light theme. */
+  skyStars: number;
+  /** fogExp2 density is this over the circuit's extent, so Spa and Monza haze identically
+   *  despite being different sizes. */
+  fogDensityK: number;
+  // apron zones, by lateral metres out from the road edge: 0-0.4 lip, 0.4-12 run-off, 12-32 grass
+  apronLip: string;
+  apronGravel: string;
+  apronGrass: string;
   carBody: string;
   carCarbon: string;
   carGlass: string;
@@ -84,15 +110,35 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     accentContrast: "#08090c",
     pos: "#3ecf8e",
     neg: "#ff5f56",
-    sceneBg: "#08090c",
-    sceneFog: "#0a0c11",
-    asphalt: "#34383f",
+    sceneBg: "#0b0e14",
+    sceneFog: "#131a26",
+    asphalt: "#26292f",
     edge: "#d9dde6",
     gridCell: "#141721",
     gridSection: "#1e2230",
-    terrainLo: "#16241c",
-    terrainMid: "#2c3324",
-    terrainHi: "#4a4636",
+    // these read as *rendered* colours now. The values they replaced were written straight into
+    // a vertex buffer without an sRGB decode, so #16241c actually reached the screen as a milky
+    // #718e7e that nobody authored; correcting the conversion made the same hexes near-black,
+    // hence the retune. Deeper and more saturated than what shipped, on purpose: the racing line
+    // is the one thing in the scene allowed to glow, and the ground has to lose that contest.
+    terrainLo: "#2e5c42",
+    terrainMid: "#5a6640",
+    terrainHi: "#8b8059",
+    terrainGlow: 1.15,
+    skyZenith: "#05070f",
+    skySun: "#ff8a3d",
+    skySunIntensity: 0.3,
+    skyHorizonSharp: 0.4,
+    skyStars: 0.55,
+    fogDensityK: 0.62,
+    // these are *unlit* base tones and the scene puts about 2.3 of combined key, hemisphere and
+    // environment on them, so they land a good deal lighter than they read here. Tuned by
+    // screenshot: gravel has to be clearly lighter than the asphalt without becoming the
+    // brightest thing in the frame, and it has to stay dark enough that the white edge line
+    // painted at the road's boundary still reads against it.
+    apronLip: "#55585d",
+    apronGravel: "#4e483d",
+    apronGrass: "#26331f",
     carBody: "#ff5c1a",
     carCarbon: "#15171d",
     carGlass: "#0c1218",
@@ -100,7 +146,7 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     phaseBrake: "#e8402e",
     phaseCoast: "#5d6472",
     lightKey: 1.5,
-    lightHemiSky: "#2a3040",
+    lightHemiSky: "#1c2534",
     lightHemiGround: "#0b0d12",
     lightHemi: 0.8,
   },
@@ -119,15 +165,27 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     accentContrast: "#ffffff",
     pos: "#0a7d49",
     neg: "#c62828",
-    sceneBg: "#eef0f3",
-    sceneFog: "#e4e7eb",
-    asphalt: "#5a5e66",
+    sceneBg: "#dfe4ea",
+    sceneFog: "#d7e2ec",
+    asphalt: "#4c5158",
     edge: "#ffffff",
     gridCell: "#dfe2e7",
     gridSection: "#c9ced6",
-    terrainLo: "#8fa886",
-    terrainMid: "#a49f7c",
-    terrainHi: "#bdb193",
+    terrainLo: "#7f9a76",
+    terrainMid: "#95906f",
+    terrainHi: "#aa9f81",
+    terrainGlow: 0.85,
+    skyZenith: "#7fa9d6",
+    skySun: "#fff4dc",
+    skySunIntensity: 0.18,
+    skyHorizonSharp: 0.55,
+    skyStars: 0,
+    // more haze than the dark theme needs: a dark terrain edge against a light sky has further
+    // to travel to disappear than a dark edge against a dark one
+    fogDensityK: 0.7,
+    apronLip: "#83888f",
+    apronGravel: "#6f6552",
+    apronGrass: "#48603d",
     carBody: "#d92e14",
     carCarbon: "#2a2d34",
     carGlass: "#4a5560",
@@ -200,6 +258,16 @@ const CSS_VAR: Record<keyof ThemeTokens, string> = {
   terrainLo: "--terrain-lo",
   terrainMid: "--terrain-mid",
   terrainHi: "--terrain-hi",
+  terrainGlow: "--terrain-glow",
+  skyZenith: "--sky-zenith",
+  skySun: "--sky-sun",
+  skySunIntensity: "--sky-sun-intensity",
+  skyHorizonSharp: "--sky-horizon-sharp",
+  skyStars: "--sky-stars",
+  fogDensityK: "--fog-density-k",
+  apronLip: "--apron-lip",
+  apronGravel: "--apron-gravel",
+  apronGrass: "--apron-grass",
   carBody: "--car-body",
   carCarbon: "--car-carbon",
   carGlass: "--car-glass",

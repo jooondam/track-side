@@ -253,6 +253,10 @@ export function CameraRig({
       enabled={!dynamic && !orbiting}
       makeDefault
       minDistance={12}
+      // **TerrainMesh depends on this cap.** Its point-and-wire field fades on a radius anchored
+      // to the scene, not to the camera, and that is only safe because 2.5 extents (about 5.1 km
+      // at Spa) keeps the camera inside the fade's outer radius (about 5.2 km). Raise this and
+      // the heightfield's hard rectangular edge comes back into view. See fadeRadii() there.
       maxDistance={extent * 2.5}
       maxPolarAngle={Math.PI * 0.495}
       enableDamping={!reducedMotion}

@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CircuitAssets, Landmarks as LandmarkData } from "../assets";
-import { BOARD_ATLAS_COLUMNS, BOARD_ATLAS_ROWS, boardAtlas, boardFaceIndex, treeCanopy } from "./textures";
+import { BOARD_ATLAS_COLUMNS, BOARD_ATLAS_ROWS, boardAtlas, boardFaceIndex } from "./textures";
 import { buildStructure, type Placement } from "./structures/generators";
 
 // visibility bands, in metres of camera **altitude above the circuit**, with hysteresis so a
@@ -35,7 +35,16 @@ const HYSTERESIS_M = 60;
 const FENCE_PITCH_M = 20;
 const FENCE_OUTBOARD_M = 9;
 const FENCE_HEIGHT_M = 2.6;
-const TREE_PITCH_M = 14;
+
+// **There are no trees.** tree_line structures stay in landmarks.json because they are real
+// features of both circuits and the schema should keep recording them, but nothing renders
+// them. What shipped was one instanced quad per tree that never billboarded, so from most
+// angles it was a flat green card standing in a field, and the alpha-cut canopy texture read as
+// a blob at every distance the LOD band allowed. Doing it properly means either crossed quads
+// (still obviously cards in motion) or real geometry (a draw call and a triangle budget for
+// scenery that carries no information about the racing line). Neither earns its place in a
+// tool whose subject is the line, so the trees are gone and the fog and the terrain field do
+// the work of suggesting depth instead.
 
 const BOARD_POST_H = 1.5;
 const BOARD_PANEL = 1.15;
@@ -155,29 +164,6 @@ export function Landmarks({ assets, exaggeration }: LandmarksProps) {
     return matrices;
   }, [assets]);
 
-  // tree lines, one instance per pitch along each authored run
-  const trees = useMemo(() => {
-    const matrices: THREE.Matrix4[] = [];
-    const dummy = new THREE.Object3D();
-    for (const s of assets.landmarks.structures) {
-      if (s.kind !== "tree_line" || s.sM === undefined) continue;
-      const count = Math.max(2, Math.round(s.lengthM / TREE_PITCH_M));
-      for (let i = 0; i < count; i++) {
-        const base = sampleLine(assets, s.sM - s.lengthM / 2 + (i * s.lengthM) / count);
-        // deterministic jitter so a tree line is irregular but identical on every load
-        const wobble = ((i * 2654435761) >>> 20) / 4096 - 0.5;
-        const offset = s.offsetM + wobble * 12;
-        const scale = 7 + (((i * 40503) >>> 8) % 100) / 25;
-        dummy.position.set(base.x + -base.tz * offset, base.y + scale / 2, base.z + base.tx * offset);
-        dummy.scale.set(scale, scale, scale);
-        dummy.rotation.set(0, wobble * 3.1, 0);
-        dummy.updateMatrix();
-        matrices.push(dummy.matrix.clone());
-      }
-    }
-    return matrices;
-  }, [assets]);
-
   // per-instance atlas cell, consumed by the shader patch below
   const boardUv = useMemo(() => {
     const data = new Float32Array(boards.length * 2);
@@ -215,22 +201,8 @@ export function Landmarks({ assets, exaggeration }: LandmarksProps) {
 
   useEffect(() => () => panelMaterial.dispose(), [panelMaterial]);
 
-  const treeMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        map: treeCanopy(),
-        transparent: true,
-        alphaTest: 0.45,
-        roughness: 1,
-        side: THREE.DoubleSide,
-      }),
-    [],
-  );
-  useEffect(() => () => treeMaterial.dispose(), [treeMaterial]);
-
   // apply the instance matrices once the meshes exist
   const fenceRef = useRef<THREE.InstancedMesh>(null);
-  const treeRef = useRef<THREE.InstancedMesh>(null);
   const postRef = useRef<THREE.InstancedMesh>(null);
   const panelRef = useRef<THREE.InstancedMesh>(null);
 
@@ -238,8 +210,6 @@ export function Landmarks({ assets, exaggeration }: LandmarksProps) {
     const dummy = new THREE.Object3D();
     fence.forEach((m, i) => fenceRef.current?.setMatrixAt(i, m));
     if (fenceRef.current) fenceRef.current.instanceMatrix.needsUpdate = true;
-    trees.forEach((m, i) => treeRef.current?.setMatrixAt(i, m));
-    if (treeRef.current) treeRef.current.instanceMatrix.needsUpdate = true;
 
     boards.forEach((b, i) => {
       const ox = -b.p.tz * b.side * 11;
@@ -257,7 +227,7 @@ export function Landmarks({ assets, exaggeration }: LandmarksProps) {
     });
     if (postRef.current) postRef.current.instanceMatrix.needsUpdate = true;
     if (panelRef.current) panelRef.current.instanceMatrix.needsUpdate = true;
-  }, [fence, trees, boards]);
+  }, [fence, boards]);
 
   useFrame(({ camera }) => {
     const target = midRef.current;
@@ -287,9 +257,6 @@ export function Landmarks({ assets, exaggeration }: LandmarksProps) {
             <meshStandardMaterial vertexColors roughness={0.85} metalness={0.05} />
           </mesh>
         )}
-        <instancedMesh ref={treeRef} args={[undefined, undefined, Math.max(trees.length, 1)]} material={treeMaterial}>
-          <planeGeometry args={[1, 1]} />
-        </instancedMesh>
       </group>
 
       {/* near band: the detail you only see from the chase and corner shots */}

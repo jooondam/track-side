@@ -146,15 +146,14 @@ function bankingRemnant(s: Structure): THREE.BufferGeometry {
   return coloured(geometry, 0.46, 0.45, 0.42);
 }
 
-/** kinds that produce merged static geometry. tree_line and the derived furniture are instanced. */
-export const STATIC_KINDS = new Set([
-  "gantry",
-  "bridge",
-  "grandstand",
-  "pit_building",
-  "banking_remnant",
-]);
-
+/**
+ * geometry for one authored structure, or null for a kind with no generator.
+ *
+ * Returning null is a supported outcome, not a gap: tree_line entries stay in landmarks.json
+ * because both circuits really are lined with trees and the schema should record that, but
+ * nothing renders them (see the note in Landmarks.tsx). marshal_post, tyre_wall and catch_fence
+ * are the same, valid in the schema and deliberately unrendered.
+ */
 export function buildStructure(s: Structure, p: Placement | null): THREE.BufferGeometry | null {
   if (s.kind === "banking_remnant") return bankingRemnant(s);
   if (!p) return null;
