@@ -115,46 +115,65 @@ export function kerbStripe(): THREE.Texture {
   });
 }
 
-/** gravel trap colour: warm grey with coarse grain, tiled small. */
-export function gravelColor(): THREE.Texture {
-  return memo("gravelColor", () => {
+/**
+ * one packed grain map for the whole apron, sampled at three different scales in the shader.
+ *
+ *   R  coarse gravel grain, flat in 2x2 blocks so a stone has a readable size
+ *   G  fine grass grain, per-pixel and lower contrast
+ *   B  a low-frequency blotch, for patchiness across a field
+ *
+ * **One texture rather than three, and at repeat (1,1), because the repeat is the bug this
+ * replaces.** The apron's TEXCOORD_0 is (lateral offset in metres 0..32, s in metres), not a
+ * 0..1 pair. The textures this supersedes carried repeat [24,24] and [40,40] against that UV,
+ * which is a 4 cm and a 2.5 cm tile: both averaged to flat grey at every camera distance the
+ * viewer can reach, so 64 m of run-off and grass read as one continuous slab and the 12 m road
+ * looked 76 m wide. A texture's repeat is a property of the texture and these are memoised
+ * singletons shared between material slots, so the scale has to be applied per-sample in the
+ * shader instead. Do not set a repeat on this.
+ *
+ * The blotch channel is tiled seamlessly off a wrapped lattice. R and G are not, and do not
+ * need to be: high-frequency noise has no visible seam.
+ */
+export function apronGrain(): THREE.Texture {
+  return memo("apronGrain", () => {
     const size = 256;
     const [element, context] = canvas(size, size);
     const image = context.createImageData(size, size);
     const data = image.data;
-    const random = mulberry32(0x9e37_79b9);
+    const random = mulberry32(0xa970_11c3);
 
-    for (let i = 0; i < size * size; i++) {
-      const grain = random();
-      const value = 138 + grain * 60;
-      const o = 4 * i;
-      data[o] = value;
-      data[o + 1] = value * 0.96;
-      data[o + 2] = value * 0.87;
-      data[o + 3] = 255;
+    // value noise on a 16x16 lattice, indices wrapped so the tile joins itself
+    const lattice = 16;
+    const grid = new Float32Array(lattice * lattice);
+    for (let i = 0; i < grid.length; i++) grid[i] = random();
+    const ease = (t: number) => t * t * (3 - 2 * t);
+    const blotchAt = (x: number, y: number) => {
+      const fx = (x / size) * lattice;
+      const fy = (y / size) * lattice;
+      const x0 = Math.floor(fx) % lattice;
+      const y0 = Math.floor(fy) % lattice;
+      const x1 = (x0 + 1) % lattice;
+      const y1 = (y0 + 1) % lattice;
+      const tx = ease(fx - Math.floor(fx));
+      const ty = ease(fy - Math.floor(fy));
+      const top = grid[y0 * lattice + x0] + tx * (grid[y0 * lattice + x1] - grid[y0 * lattice + x0]);
+      const bot = grid[y1 * lattice + x0] + tx * (grid[y1 * lattice + x1] - grid[y1 * lattice + x0]);
+      return top + ty * (bot - top);
+    };
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const o = 4 * (y * size + x);
+        let h = ((x >> 1) * 374761393 + (y >> 1) * 668265263) | 0;
+        h = Math.imul(h ^ (h >> 13), 1274126177);
+        data[o] = 90 + (((h ^ (h >> 16)) >>> 0) % 166);
+        data[o + 1] = 150 + Math.floor(random() * 90);
+        data[o + 2] = Math.floor(blotchAt(x, y) * 255);
+        data[o + 3] = 255;
+      }
     }
     context.putImageData(image, 0, 0);
-    return finish(element, [24, 24]);
-  });
-}
-
-/** grass roughness break-up, coarser and higher contrast than asphalt. */
-export function grassRoughness(): THREE.Texture {
-  return memo("grassRoughness", () => {
-    const size = 256;
-    const [element, context] = canvas(size, size);
-    const image = context.createImageData(size, size);
-    const data = image.data;
-    const random = mulberry32(0xc0ff_ee01);
-
-    for (let i = 0; i < size * size; i++) {
-      const value = 190 + random() * 65;
-      const o = 4 * i;
-      data[o] = data[o + 1] = data[o + 2] = value;
-      data[o + 3] = 255;
-    }
-    context.putImageData(image, 0, 0);
-    return finish(element, [40, 40]);
+    return finish(element);
   });
 }
 
@@ -248,30 +267,3 @@ export function boardFaceIndex(face: string): number {
   return (BOARD_ATLAS_FACES as readonly string[]).indexOf(face);
 }
 
-/** crossed-quad tree canopy: an alpha-cut silhouette, deliberately soft-edged. */
-export function treeCanopy(): THREE.Texture {
-  return memo("treeCanopy", () => {
-    const size = 128;
-    const [element, context] = canvas(size, size);
-    const random = mulberry32(0x7ee5_0001);
-
-    context.clearRect(0, 0, size, size);
-    // trunk
-    context.fillStyle = "rgba(48,40,32,0.95)";
-    context.fillRect(size / 2 - 4, size * 0.62, 8, size * 0.38);
-    // canopy as overlapping blobs, so the silhouette is irregular rather than a circle
-    for (let i = 0; i < 26; i++) {
-      const cx = size / 2 + (random() - 0.5) * size * 0.62;
-      const cy = size * 0.40 + (random() - 0.5) * size * 0.42;
-      const r = size * (0.10 + random() * 0.12);
-      const shade = 42 + Math.floor(random() * 38);
-      context.fillStyle = `rgba(${Math.floor(shade * 0.6)},${shade},${Math.floor(shade * 0.5)},0.94)`;
-      context.beginPath();
-      context.arc(cx, cy, r, 0, Math.PI * 2);
-      context.fill();
-    }
-    const texture = new THREE.CanvasTexture(element);
-    texture.name = "treeCanopy";
-    return texture;
-  });
-}

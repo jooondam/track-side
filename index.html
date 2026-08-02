@@ -9,7 +9,11 @@
     />
     <title>track-side: GT3 racing line viewer</title>
     <!-- the base colours are duplicated here on purpose: they paint the first frame before any
-         JavaScript runs, so there is no white flash before the token stylesheet is injected -->
+         JavaScript runs, so there is no white flash before the token stylesheet is injected.
+         There is deliberately no prefers-color-scheme rule: theme.ts ignores the OS preference
+         and defaults to dark, so honouring it here only bought a light first frame followed by
+         a dark app for anyone on a light OS. The script below reads the same stored choice
+         theme.ts will read, so the first frame matches the app even for a light-theme user. -->
     <style>
       html,
       body,
@@ -22,15 +26,23 @@
         font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
           sans-serif;
       }
-      @media (prefers-color-scheme: light) {
-        html,
-        body,
-        #root {
-          background: #eef0f3;
-          color: #14161a;
-        }
+      :root[data-theme="light"],
+      :root[data-theme="light"] body,
+      :root[data-theme="light"] #root {
+        background: #eef0f3;
+        color: #14161a;
       }
     </style>
+    <script>
+      // runs before first paint; mirrors initialTheme() in src/ui/theme.ts
+      try {
+        if (localStorage.getItem("track-side:theme") === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      } catch (_) {
+        /* private mode: fall through to dark */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
