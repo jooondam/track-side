@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "codex-grid-background",
+        "value": "*",
+        "files": [
+          "src/ui/Landing.tsx"
+        ],
+        "createdAt": "2026-08-21T22:08:11.185Z",
+        "reason": "finish review's rebuild instruction names a printed process-blue grid as the sheet's stock, and the direction contract's world is NCR run-plan paper: this is gridded engineering stock, the blueprint/measurement surface the rule carves out, not decoration on a plain page"
+      }
+    ]
+  }
+}
