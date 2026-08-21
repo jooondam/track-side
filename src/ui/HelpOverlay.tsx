@@ -114,7 +114,7 @@ export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => v
               <h3
                 style={{
                   margin: "0 0 var(--s2)",
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: 600,
                   letterSpacing: "0.09em",
                   textTransform: "uppercase",

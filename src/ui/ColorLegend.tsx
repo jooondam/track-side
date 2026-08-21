@@ -26,7 +26,7 @@ function Swatch({ color, label }: { color: string; label: string }) {
           borderRadius: 1,
         }}
       />
-      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
     </span>
   );
 }
@@ -84,7 +84,7 @@ export function ColorLegend({ colorMode, result }: ColorLegendProps) {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              fontSize: 10,
+              fontSize: 12,
               color: "var(--text-dim)",
               marginTop: 2,
             }}

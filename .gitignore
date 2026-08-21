@@ -6,6 +6,12 @@ __pycache__/
 venv/
 node_modules/
 dist/
+shots/
+shots-p0/
 .DS_Store
 
 docs/DESIGN_NOTES.md
+
+# impeccable runtime state: a live-session pid and port, and tool config
+.impeccable/questions/
+.impeccable/live/

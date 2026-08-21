@@ -1,28 +1,32 @@
 // landscape context as a glowing point-and-wire field that recedes to nothing.
 //
-// Three layers, all sharing one position buffer so the whole landscape is three draw calls and
-// one copy of the geometry:
+// Three layers, and **the visible two no longer live on the heightfield's grid**:
 //
-//   1. a solid surface, coloured close to the background. It is there to *occlude*, not to be
-//      seen: without it the circuit reads through its own hills and the far side of the lap
-//      hangs in front of the near side.
-//   2. the triangulated wireframe, indexed off the same positions, dim.
-//   3. a point at every grid vertex, bright, coloured by elevation.
+//   1. an occluder plate on the heightfield's own rectangular grid plus its skirt, coloured close
+//      to the background. It is there to *occlude*, not to be seen: without it the circuit reads
+//      through its own hills and the far side of the lap hangs in front of the near side. Its
+//      rectangle was never visible, and its geometry backs the road clearance guarantee.
+//   2. a wireframe over the inner lattice, dim, gone before its own boundary.
+//   3. dots over the whole field, bright, coloured by elevation.
 //
-// The heightfield is 200 cells across, which at Spa is a 2159 x 3468 m rectangle, and that
-// rectangle used to be visible as a hard edge from any zoomed-out camera. Two things fix it and
-// both are needed:
+// Layers 2 and 3 are built by ./terrainGrid's buildFieldLayout: a circular lattice around the
+// circuit that dissolves into scatter rings further out. They used to sit on the heightfield's
+// grid, and that drew its 1:1.6 rectangle onto the screen as a bright plateau with a hard edge --
+// density is brightness for a fixed-size sprite, and the skirt thinned 16x on the short axis
+// while the fade, anchored on the half-diagonal, had not started. The full measurement is in
+// terrainGrid.ts. Circles cannot produce a straight edge, which is the point.
 //
-//   - **a geometric skirt.** The grid no longer matches the heightfield. It carries 24 extra
-//     rings on each side whose spacing grows geometrically out to 5 km, with heights
-//     edge-clamped and relaxed toward the mean. Fading alone could not work: fade the field out
-//     before its boundary and the whole thing vanishes at the overview instead.
-//   - **a radial fade with an in-material blur.** Past FADE_START the dots grow, dim and soften
-//     until they are gone; the wireframe goes first, so the field reads lattice, then dots, then
+// Three things keep it looking like landscape rather than like a diagram:
+//
+//   - **jitter.** An exact grid beats against the pixel raster into diagonal moire streaks.
+//   - **spread.** A dot's pixel area scales with the ground area it stands for, so thinning reads
+//     as recession rather than as a sudden darkness past the lattice.
+//   - **a radial fade with an in-material blur.** Past fadeStart the dots grow, dim and soften
+//     until they are gone; the wire goes first, so the field reads lattice, then dots, then
 //     nothing. Growing a sprite while dropping its alpha spreads the same energy over more
 //     pixels, which is a blur, done with no render target and no postprocessing pass (0.2b).
 //
-// And a guarantee underneath both, which lives in two other files: fogExp2 carries everything
+// And a guarantee underneath all of it, which lives in two other files: fogExp2 carries everything
 // at that range to exactly tokens.sceneFog, and SkyDome paints its entire below-horizon half
 // with the same token. So the plate's far edge and the sky it ends against are the same colour
 // by construction, and the silhouette cannot be found from any camera OrbitControls allows.
@@ -35,9 +39,19 @@ import * as THREE from "three";
 import type { Terrain } from "../assets";
 import { useTheme, useThemeTokens } from "../ui/theme";
 import { hexToLinearRgb } from "./colorspace";
-import { SKIRT_RINGS, buildGridAxis, fadeRadii, smoothstep01 } from "./terrainGrid";
+import {
+  DROP_BELOW_ROAD,
+  SKIRT_RINGS,
+  buildFieldLayout,
+  buildGridAxis,
+  WIRE_STRIDE,
+  fieldRadii,
+  plateHeightAt,
+  plateVertexHeight,
+} from "./terrainGrid";
 
-const DROP_BELOW_ROAD = 1.0; // sit under the ribbon so it never z-fights the apron
+// DROP_BELOW_ROAD lives in ./terrainGrid with the rest of the grid maths, so the clearance it
+// guarantees can be asserted against the shipped heightfields in node. See the note there.
 
 
 // shared shader preamble. The distance that drives everything is **horizontal**: the elevation
@@ -47,44 +61,30 @@ const FADE_CHUNK = /* glsl */ `
 uniform vec3  uAnchor;
 uniform float uFadeStart;
 uniform float uFadeEnd;
-uniform float uTime;
-uniform float uMotion;
-uniform float uPulsePeriod;
-uniform float uPulseWidth;
-uniform float uPulseGain;
 
 float groundDistance( vec3 worldPos ) {
   return length( worldPos.xz - uAnchor.xz );
 }
 
-// how edge-on the ground is from here, 0 at grazing and 1 looking straight down.
+// how edge-on the ground is from here: a dimming, not a cutoff.
 //
-// Without this the field saturates into two blinding bars along the horizon whenever the camera
-// drops near ground level: the dots are a fixed pixel size and do not attenuate, so as the
-// ground plane foreshortens, more and more of them stack into the same pixel and an additive
-// layer just adds until it clips. Dimming by the view angle is the physically right answer --
-// a mat of points seen edge-on covers less solid angle per point, not more -- and it is what
-// keeps the chase camera's horizon readable.
+// The problem it solves is real. The dots are a fixed pixel size and do not attenuate, so as the
+// ground plane foreshortens toward the horizon more and more of them stack into the same pixel,
+// and an additive layer just adds until it clips into two blinding bars. Dimming by the view
+// angle is the physically right answer: a mat of points seen edge-on covers less solid angle per
+// point, not more.
 //
-// It is deliberately *not* an altitude fade. The dot field this replaced faded out below 60 m
-// of camera height, which left the chase shot with no ground at all; this dims only what is
-// edge-on, so the ground directly under a low camera stays exactly as bright as before.
+// **But it used to solve it by deleting the ground.** smoothstep(0.003, 0.05, ratio) reaches zero
+// below 0.003, and from a chase camera 2.6 m up that is everything past about 300 m: measured,
+// 100 m away was 52% dimmed, 150 m 78%, 300 m 96%. That was survivable while 32 m of apron framed
+// the road; with the apron gone it left the chase view as a road floating in black.
+//
+// So it keeps a floor. The horizon still loses three quarters of its brightness, which is what
+// stops the pile-up, and the ground under a low camera is still ground.
 float grazeFade( vec3 worldPos ) {
   vec3  toEye = cameraPosition - worldPos;
   float len   = max( length( toEye ), 1e-4 );
-  // the window is narrow on purpose. At 0.015..0.22 this also swallowed ground 100 m to the
-  // side of a chase camera, which is the failure it was meant to prevent; the pile-up only
-  // actually bites below about 0.05, so that is where it ends.
-  return smoothstep( 0.003, 0.05, abs( toEye.y ) / len );
-}
-
-// one crest sweeping outward from the anchor every uPulsePeriod seconds. A 220 m gaussian over
-// a 5.2 km reach lights about 4% of the field at any instant, which is the difference between
-// ambience and a radar sweep.
-float ringPulse( float d ) {
-  float ringR = fract( uTime / uPulsePeriod ) * uFadeEnd;
-  float arg   = ( d - ringR ) / uPulseWidth;
-  return uMotion * uPulseGain * exp( -arg * arg );
+  return mix( 0.26, 1.0, smoothstep( 0.002, 0.075, abs( toEye.y ) / len ) );
 }
 `;
 
@@ -114,10 +114,16 @@ const DOT_VERTEX = /* glsl */ `
 uniform float uPixelRatio;
 uniform float uSize;
 uniform float uFarGrow;
+// motion lives here rather than in FADE_CHUNK: since the sweep was removed the dots are the only
+// layer with a time-varying term, and a uniform the wire declares but never reads is a lie about
+// what that shader does.
 uniform float uTwinkle;
+uniform float uTime;
+uniform float uMotion;
 
 attribute vec3  aTint;
 attribute float aPhase;
+attribute float aSpread;
 
 varying vec3  vTint;
 varying float vAlpha;
@@ -136,19 +142,32 @@ void main() {
   float far      = smoothstep( uFadeStart, uFadeEnd, d );
   vSoft = far;
 
-  float pulse = ringPulse( d );
-  // the hashed phase decorrelates neighbours, which is what stops this reading as a global
-  // flicker. At 0.09 it sits below "something is animating" and above "this field is dead".
-  float tw = uMotion * uTwinkle * sin( uTime * 0.6 + aPhase * 6.2831853 );
+  // **Shimmer, not a pulse.** What was here was a crest sweeping outward from the anchor every
+  // 11 s, and it was broken in a way no amount of tuning would fix: ringPulse divided by each
+  // material's own uFadeEnd, and the dot and wire layers have different ones, so the same crest
+  // swept at 501 m/s on the dots and 311 m/s on the wire and the two could never line up. It was
+  // also a 28% brightening lasting 0.9 s once every 11 s, which is close to imperceptible, and it
+  // was a radar sweep competing with the racing line for the eye. Deleted rather than repaired.
+  //
+  // The twinkle is what is left, and it is now actually visible. Each dot gets its own phase and
+  // its own rate from the same hash, so the field breathes unevenly instead of pulsing in unison:
+  // a single shared rate reads as a global flicker no matter how small the amplitude.
+  float rate = 0.35 + 0.5 * aPhase;
+  float tw   = uMotion * uTwinkle * sin( uTime * rate + aPhase * 6.2831853 );
 
-  vTint  = aTint * ( 1.0 + pulse + tw );
+  vTint  = aTint * ( 1.0 + tw );
   vAlpha = ( 1.0 - far ) * mix( 1.0, 0.55, far ) * grazeFade( worldPos );
 
   // sizeAttenuation is deliberately absent and cannot be recovered here: three only maintains
   // the size and scale uniforms for material.isPointsMaterial, so defining
   // USE_SIZEATTENUATION on a ShaderMaterial yields scale = 0 and zero-pixel points. The
   // distance ramp replaces it, and doubles as the blur.
-  float size = uSize * ( 1.0 + uFarGrow * far ) * ( 1.0 + 0.30 * pulse + 0.50 * tw );
+  // **Grow a sparse dot to cover the ground it stands for.** The scatter thins outward, and
+  // density is brightness for a fixed-size sprite, so without this the field would have to be
+  // three times as dense to avoid reading as a ring of sudden darkness just past the lattice.
+  // sqrt, so pixel AREA scales with aSpread: density falls as 1/spread^2 and area rises as
+  // spread, leaving 1/spread for the eye to integrate instead of 1/spread^2.
+  float size = uSize * sqrt( aSpread ) * ( 1.0 + uFarGrow * far ) * ( 1.0 + 0.55 * tw );
   // the clamp guards ALIASED_POINT_SIZE_RANGE, which is as low as 63 on some mobile GL. Our
   // worst case is about 17.5 px at dpr 2, so it never engages; it is here so a future tweak
   // cannot silently produce invisible points.
@@ -210,8 +229,9 @@ void main() {
   float d        = groundDistance( worldPos );
   float far      = smoothstep( uFadeStart, uFadeEnd, d );
 
-  // no twinkle on the lattice: twinkling lines read as noise rather than as atmosphere
-  vTint  = aTint * ( 1.0 + ringPulse( d ) );
+  // no twinkle on the lattice: twinkling lines read as noise rather than as atmosphere, and the
+  // lattice is the layer that has to stay legible as a survey grid
+  vTint  = aTint;
   vAlpha = ( 1.0 - far ) * grazeFade( worldPos );
 
   #include <fog_vertex>
@@ -243,11 +263,13 @@ void main() {
 
 interface TerrainMeshProps {
   terrain: Terrain;
+  /** the circuit's own bounding-box extent, which sets how far the lattice reaches. */
+  extent: number;
   exaggeration: number;
   reducedMotion: boolean;
 }
 
-export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMeshProps) {
+export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: TerrainMeshProps) {
   const tokens = useThemeTokens();
   const { theme } = useTheme();
   const dark = theme === "dark";
@@ -268,7 +290,7 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
     };
   }, [tokens]);
 
-  const radii = useMemo(() => fadeRadii(terrain), [terrain]);
+  const radii = useMemo(() => fieldRadii(terrain, extent), [terrain, extent]);
 
   const anchor = useMemo(() => {
     // the heightfield's centre. **The fade is anchored to the scene, not to the camera.** A
@@ -283,6 +305,18 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
     const depth = (terrain.nCells - 1) * terrain.dz;
     return new THREE.Vector3(terrain.x0 + width / 2, 0, terrain.z0 + depth / 2);
   }, [terrain]);
+
+  const layout = useMemo(
+    () =>
+      buildFieldLayout({
+        centerX: anchor.x,
+        centerZ: anchor.z,
+        latticeRadiusM: radii.latticeRadius,
+        wireRadiusM: radii.wireRadius,
+        outerRadiusM: radii.outerRadius,
+      }),
+    [anchor, radii],
+  );
 
   const { surface, wire, dots } = useMemo(() => {
     const n = terrain.nCells;
@@ -303,61 +337,28 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
     }
     const hMean = hSum / terrain.heights.length;
     const hSpan = Math.max(hMax - hMin, 1e-9);
-
-    const positions = new Float32Array(N * N * 3);
-    const tints = new Float32Array(N * N * 3);
-    const phases = new Float32Array(N * N);
-    const rgb: [number, number, number] = [0, 0, 0];
     const glow = tokens.terrainGlow;
+    const rgb: [number, number, number] = [0, 0, 0];
 
+    // --- the occluder plate: the original rectangular grid, unchanged --------------------------
+    // It is sceneBg-coloured and fogged to sceneFog, so its rectangle was never what showed. Its
+    // geometry also backs the road clearance guarantee, so it stays exactly as it was.
+    const platePos = new Float32Array(N * N * 3);
     for (let iz = 0; iz < N; iz++) {
-      // how deep into the skirt this row is: 0 in the core, rising to SKIRT_RINGS at the edge
-      const ringZ = iz < R ? R - iz : iz >= R + n ? iz - (R + n - 1) : 0;
-      const coreIz = Math.min(Math.max(iz - R, 0), n - 1);
       for (let ix = 0; ix < N; ix++) {
-        const ringX = ix < R ? R - ix : ix >= R + n ? ix - (R + n - 1) : 0;
-        const coreIx = Math.min(Math.max(ix - R, 0), n - 1);
         const v = iz * N + ix;
-
-        // edge-clamped sample, relaxed toward the global mean across the ring. A pure clamp
-        // extrudes Eau Rouge's relief straight out to 5 km and reads as a wall; a pure mean is
-        // a table-flat plate meeting the real terrain at a crease. Smoothstepped, so neither
-        // end of the ramp has a discontinuity.
-        const relax = smoothstep01(Math.max(ringX, ringZ) / R);
-        const sampled = terrain.heights[coreIz * n + coreIx];
-        const h = sampled + relax * (hMean - sampled);
-
-        positions[3 * v] = xs[ix];
-        positions[3 * v + 1] = h - DROP_BELOW_ROAD;
-        positions[3 * v + 2] = zs[iz];
-
-        rampColor((sampled - hMin) / hSpan, rgb);
-        tints[3 * v] = Math.min(rgb[0] * glow, 1);
-        tints[3 * v + 1] = Math.min(rgb[1] * glow, 1);
-        tints[3 * v + 2] = Math.min(rgb[2] * glow, 1);
-
-        // deterministic per-vertex phase, same idiom as the tree-line jitter, so the field
-        // twinkles identically on every load and in every screenshot
-        phases[v] = ((v * 2654435761) >>> 20) / 4096;
+        platePos[3 * v] = xs[ix];
+        platePos[3 * v + 1] = plateVertexHeight(terrain, hMean, ix, iz).h - DROP_BELOW_ROAD;
+        platePos[3 * v + 2] = zs[iz];
       }
     }
-
-    const positionAttr = new THREE.Float32BufferAttribute(positions, 3);
-    const tintAttr = new THREE.Float32BufferAttribute(tints, 3);
-    const phaseAttr = new THREE.Float32BufferAttribute(phases, 1);
-
-    // named aTint rather than `color` on purpose: three's vertex prefix declares `color` behind
-    // USE_COLOR, so a ShaderMaterial that declares it too is a duplicate-declaration compile
-    // error, and one that does not is an unbound attribute. A custom name sidesteps the define.
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", positionAttr);
-    geo.setAttribute("aTint", tintAttr);
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(platePos, 3));
     const triangles: number[] = [];
     for (let iz = 0; iz < N - 1; iz++) {
       for (let ix = 0; ix < N - 1; ix++) {
         const a = iz * N + ix;
-        // wound for +Y normals, which is also what puts the wire's diagonal on the same edge
-        // the surface actually splits along
+        // wound for +Y normals, and the anti-diagonal split plateHeightAt reproduces
         triangles.push(a, a + N, a + 1, a + 1, a + N, a + N + 1);
       }
     }
@@ -365,24 +366,68 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
     // no normals: the occluder is a MeshBasicMaterial and never shades. It also cannot pick up
     // scene.environment, which three only applies to standard/physical materials.
 
-    // the wireframe shares the surface's position and tint buffers and carries only its own
-    // index, so the triangulated look costs an index buffer rather than a second copy of 61k
-    // vertices
-    // One diagonal per cell, **everywhere**, matching the triangulation the surface uses.
-    //
-    // Drawing it only inside the heightfield looked like a free saving: nobody can resolve a
-    // diagonal at 3 km. But the dots and lines are a fixed pixel size, so lattice density *is*
-    // brightness, and three segments per cell inside against two outside is a 50% step along a
-    // perfectly straight line. That redrew the heightfield's rectangle on screen as a lighter
-    // plateau, which is the exact artefact the skirt exists to remove. 13% more segments is the
-    // price of not having a visible boundary.
+    // --- the visible field: circular lattice, dissolving into scatter --------------------------
+    const positions = new Float32Array(layout.count * 3);
+    const tints = new Float32Array(layout.count * 3);
+    const phases = new Float32Array(layout.count);
+
+    for (let i = 0; i < layout.count; i++) {
+      const x = layout.xz[2 * i];
+      const z = layout.xz[2 * i + 1];
+      // sampled off the *plate*, so every dot sits on the surface that occludes it rather than
+      // sinking beneath it out in the skirt. See plateHeightAt.
+      const { h, sampled } = plateHeightAt(terrain, xs, zs, hMean, x, z);
+
+      positions[3 * i] = x;
+      positions[3 * i + 1] = h - DROP_BELOW_ROAD;
+      positions[3 * i + 2] = z;
+
+      // tinted by the *raw* terrain, not the relaxed skirt: relaxing the colour too would wash
+      // the whole far field to one mid-ramp value
+      rampColor((sampled - hMin) / hSpan, rgb);
+      tints[3 * i] = Math.min(rgb[0] * glow, 1);
+      tints[3 * i + 1] = Math.min(rgb[1] * glow, 1);
+      tints[3 * i + 2] = Math.min(rgb[2] * glow, 1);
+
+      // deterministic per-point phase, so the field shimmers identically on every load and in
+      // every screenshot, which is what makes two captures comparable
+      phases[i] = ((i * 2654435761) >>> 20) / 4096;
+    }
+
+    const positionAttr = new THREE.Float32BufferAttribute(positions, 3);
+    // named aTint rather than `color` on purpose: three's vertex prefix declares `color` behind
+    // USE_COLOR, so a ShaderMaterial that declares it too is a duplicate-declaration compile
+    // error, and one that does not is an unbound attribute. A custom name sidesteps the define.
+    const tintAttr = new THREE.Float32BufferAttribute(tints, 3);
+
+    // the wireframe shares the field's position and tint buffers and carries only its own index.
+    // It covers the inner part of the lattice only, and its fade reaches zero inside that, so its
+    // circular boundary is never a visible edge. Three segments per cell, matching the plate's
+    // triangulation: two would read as a different lattice from the surface underneath.
     const segments: number[] = [];
-    for (let iz = 0; iz < N; iz++) {
-      for (let ix = 0; ix < N; ix++) {
-        const v = iz * N + ix;
-        if (ix < N - 1) segments.push(v, v + 1);
-        if (iz < N - 1) segments.push(v, v + N);
-        if (ix < N - 1 && iz < N - 1) segments.push(v + 1, v + N);
+    const cols = layout.latticeCols;
+    const wireR2 = layout.wireRadiusM * layout.wireRadiusM;
+    const inWire = (idx: number) => {
+      const dx = positions[3 * idx] - anchor.x;
+      const dz = positions[3 * idx + 2] - anchor.z;
+      return dx * dx + dz * dz <= wireR2;
+    };
+    const link = (a: number, b: number) => {
+      if (a >= 0 && b >= 0 && inWire(a) && inWire(b)) segments.push(a, b);
+    };
+    const K = WIRE_STRIDE;
+    for (let j = 0; j + K < cols; j += K) {
+      for (let i = 0; i + K < cols; i += K) {
+        const v = layout.latticeAt[j * cols + i];
+        const right = layout.latticeAt[j * cols + i + K];
+        const down = layout.latticeAt[(j + K) * cols + i];
+        if (v >= 0) {
+          link(v, right);
+          link(v, down);
+        }
+        // the diagonal, matching the plate's anti-diagonal split: two segments per cell would
+        // read as a different lattice from the surface underneath it
+        link(right, down);
       }
     }
     const wireGeo = new THREE.BufferGeometry();
@@ -395,19 +440,14 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
     const dotGeo = new THREE.BufferGeometry();
     dotGeo.setAttribute("position", positionAttr);
     dotGeo.setAttribute("aTint", tintAttr);
-    dotGeo.setAttribute("aPhase", phaseAttr);
+    dotGeo.setAttribute("aPhase", new THREE.Float32BufferAttribute(phases, 1));
+    dotGeo.setAttribute("aSpread", new THREE.Float32BufferAttribute(layout.spread, 1));
 
     return { surface: geo, wire: wireGeo, dots: dotGeo };
-  }, [terrain, rampColor, tokens.terrainGlow]);
+  }, [terrain, layout, anchor, rampColor, tokens.terrainGlow]);
 
   const { dotMaterial, wireMaterial, occluderMaterial } = useMemo(() => {
-    const shared = () => ({
-      uAnchor: { value: anchor },
-      uTime: { value: 0 },
-      uMotion: { value: reducedMotion ? 0 : 1 },
-      uPulsePeriod: { value: 11.0 },
-      uPulseWidth: { value: 220.0 },
-    });
+    const shared = () => ({ uAnchor: { value: anchor } });
 
     const dot = new THREE.ShaderMaterial({
       vertexShader: DOT_VERTEX,
@@ -416,10 +456,13 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
         THREE.UniformsLib.fog,
         {
           ...shared(),
+          uTime: { value: 0 },
+          uMotion: { value: reducedMotion ? 0 : 1 },
           uFadeStart: { value: radii.fadeStart },
           uFadeEnd: { value: radii.fadeEnd },
-          uPulseGain: { value: dark ? 0.28 : 0.16 },
-          uTwinkle: { value: dark ? 0.09 : 0.05 },
+          // 0.22 against the old 0.09. At 9% the field was static to the eye, which is what
+          // "the animation is not working" meant.
+          uTwinkle: { value: dark ? 0.22 : 0.12 },
           uSize: { value: dark ? 2.4 : 2.0 },
           uFarGrow: { value: dark ? 1.8 : 1.4 },
           uSharpNear: { value: dark ? 3.2 : 3.6 },
@@ -450,8 +493,7 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
           ...shared(),
           uFadeStart: { value: radii.wireFadeStart },
           uFadeEnd: { value: radii.wireFadeEnd },
-          uPulseGain: { value: dark ? 0.18 : 0.1 },
-          uOpacity: { value: dark ? 0.22 : 0.3 },
+          uOpacity: { value: dark ? 0.26 : 0.32 },
         },
       ]),
       fog: true,
@@ -506,20 +548,20 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
     [surface, wire, dots],
   );
 
-  // live matchMedia, so this can flip mid-session and must not be baked in at construction
+  // live: the OS preference can flip mid-session, and the side panel's override can flip any
+  // time, so this must not be baked in at construction
   useEffect(() => {
-    const motion = reducedMotion ? 0 : 1;
-    dotMaterial.uniforms.uMotion.value = motion;
-    wireMaterial.uniforms.uMotion.value = motion;
-  }, [dotMaterial, wireMaterial, reducedMotion]);
+    dotMaterial.uniforms.uMotion.value = reducedMotion ? 0 : 1;
+  }, [dotMaterial, reducedMotion]);
 
   const clock = useRef(0);
   useFrame(({ gl }, dt) => {
     dotMaterial.uniforms.uPixelRatio.value = gl.getPixelRatio();
-    if (reducedMotion) return; // uTime stays at 0: a static, correctly faded grid
+    if (reducedMotion) return; // uTime stays at 0: a static, correctly faded field
     clock.current += dt;
+    // the dots only. The wire has no time-varying term at all since the sweep was removed, so
+    // advancing its clock would be an upload a frame that changes nothing on screen.
     dotMaterial.uniforms.uTime.value = clock.current;
-    wireMaterial.uniforms.uTime.value = clock.current;
   });
 
   const scale: [number, number, number] = [1, exaggeration, 1];

@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { CircuitAssets } from "./assets";
-import { loadCircuitAssets } from "./assets";
+import { CircuitLoadError, loadCircuitAssets } from "./assets";
 import type { LapProgress } from "./render/CarMarker";
 import type { ColorMode } from "./render/RacingLine";
 import { Scene } from "./render/Scene";
@@ -22,13 +22,30 @@ import { ColorLegend } from "./ui/ColorLegend";
 import { HelpOverlay } from "./ui/HelpOverlay";
 import { Landing } from "./ui/Landing";
 import { AppState } from "./ui/AppState";
-import { SidePanel, ViewpointPill } from "./ui/SidePanel";
-import { TelemetryDock } from "./ui/TelemetryDock";
-import { TopBar } from "./ui/TopBar";
-import { ThemeProvider, useIsNarrow, useMediaQuery, usePrefersReducedMotion } from "./ui/theme";
+import { SceneBoundary } from "./ui/SceneBoundary";
+import { RAIL_COLLAPSED_W, RAIL_EXPANDED_W, SidePanel, ViewpointPill } from "./ui/SidePanel";
+import { DOCK_BODY_H, DOCK_STRIP_H, TelemetryDock } from "./ui/TelemetryDock";
+import { TOPBAR_H, TopBar } from "./ui/TopBar";
+import { ThemeProvider, useIsNarrow, useMediaQuery, usePrefersReducedMotion, useTheme } from "./ui/theme";
+import { readUrlState, writeUrlState } from "./ui/urlState";
 import { useExpandable } from "./ui/useExpandable";
 
 const GHOST_MU = 1.2;
+
+/** whether this browser can give us a 3D context at all. Cheap, and done once: without it a
+ *  machine with hardware acceleration switched off just renders a blank rectangle. */
+function hasWebgl(): boolean {
+  if (typeof document === "undefined") return true;
+  try {
+    const probe = document.createElement("canvas");
+    return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+// the state the query string carries, and the values it omits because they are the defaults
+const URL_DEFAULTS = { circuit: "spa", view: "overview", mu: 1.2, color: "phase" };
 
 export default function App() {
   return (
@@ -39,25 +56,40 @@ export default function App() {
 }
 
 function Viewer() {
-  const [circuitId, setCircuitId] = useState("spa");
-  const [assets, setAssets] = useState<CircuitAssets | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // read once, at mount: after this the URL is an output of the state, not an input to it
+  const initial = useMemo(() => readUrlState(URL_DEFAULTS), []);
 
-  const [mu, setMu] = useState(1.2);
-  const [colorMode, setColorMode] = useState<ColorMode>("phase");
-  const [viewpointId, setViewpointId] = useState("overview");
-  const [playing, setPlaying] = useState(true);
+  const [circuitId, setCircuitId] = useState(initial.circuit);
+  const [assets, setAssets] = useState<CircuitAssets | null>(null);
+  const [loadError, setLoadError] = useState<Error | null>(null);
+  // bumped by Retry. Without it the retry set circuitId to the value it already had, React bailed
+  // out of the render, and the load effect never re-ran: the button was inert from the day it
+  // shipped.
+  const [retryNonce, setRetryNonce] = useState(0);
+  const webglOk = useMemo(hasWebgl, []);
+
+  const [mu, setMu] = useState(initial.mu);
+  const [colorMode, setColorMode] = useState<ColorMode>(initial.color as ColorMode);
+  const [viewpointId, setViewpointId] = useState(initial.view);
+  const [playing, setPlaying] = useState(initial.playing);
   const [speedMultiplier, setSpeedMultiplier] = useState(5);
-  const [ghostEnabled, setGhostEnabled] = useState(false);
+  const [ghostEnabled, setGhostEnabled] = useState(initial.ghost);
   const [exaggeration, setExaggeration] = useState(1);
   const [showPerf, setShowPerf] = useState(false);
+  const [showFurniture, setShowFurniture] = useState(initial.furniture);
+  // null = follow the OS. An explicit choice wins, because prefers-reduced-motion was silently
+  // switching the whole scene's animation off with nothing in the UI to say so or undo it.
+  const [motionOverride, setMotionOverride] = useState<boolean | null>(initial.motion);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [solveMs, setSolveMs] = useState(0);
-  const [showLanding, setShowLanding] = useState(true);
+  const [showLanding, setShowLanding] = useState(!initial.enter);
   const [helpOpen, setHelpOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
 
-  const reducedMotion = usePrefersReducedMotion();
+  const { theme } = useTheme();
+
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const reducedMotion = motionOverride === null ? prefersReducedMotion : !motionOverride;
   const narrow = useIsNarrow();
   const portrait = useMediaQuery("(orientation: portrait)");
   const sidePanel = useExpandable("side");
@@ -83,12 +115,12 @@ function Viewer() {
         p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: 0 };
       })
       .catch((err: Error) => {
-        if (!cancelled) setLoadError(err.message);
+        if (!cancelled) setLoadError(err);
       });
     return () => {
       cancelled = true;
     };
-  }, [circuitId]);
+  }, [circuitId, retryNonce]);
 
   const solver = useMemo(
     () => (assets ? new VelocitySolver(assets.line.sM, assets.line.kappa1pm, assets.line.zM) : null),
@@ -119,9 +151,50 @@ function Viewer() {
 
   useEffect(() => setSolveMs(measuredMs), [measuredMs]);
 
+  // scripts/shots.mjs polls this before capturing. It means "the geometry is in and the first
+  // solve is done", not "the GPU has drawn it": the GLB arrives through Suspense and the terrain
+  // shaders compile on first draw, so the script still waits a fixed number of frames after this
+  // flips. Set from an effect rather than during render so it cannot lie about a committed tree.
+  useEffect(() => {
+    // written both ways: switching circuits clears assets, and a flag that only ever went true
+    // would let the script photograph the previous circuit's frame
+    (window as unknown as { __trackSideReady?: boolean }).__trackSideReady = Boolean(
+      assets && result,
+    );
+  }, [assets, result]);
+
+  // the address bar tracks the state, so any view can be linked or photographed
+  useEffect(() => {
+    writeUrlState(
+      {
+        circuit: circuitId,
+        view: viewpointId,
+        mu,
+        color: colorMode,
+        theme,
+        enter: !showLanding,
+        furniture: showFurniture,
+        ghost: ghostEnabled,
+        motion: motionOverride,
+        playing,
+      },
+      URL_DEFAULTS,
+    );
+  }, [circuitId, viewpointId, mu, colorMode, theme, showLanding, showFurniture, ghostEnabled, motionOverride, playing]);
+
   const table = useMemo(
     () => (assets && result ? buildLapTimeTable(assets.line.sM, result.vMps, result.dlM) : null),
     [assets, result],
+  );
+
+  // the ghost's own cumulative-time table, which is what makes a delta possible at all: a delta
+  // is the difference of two time-versus-distance curves, and until now only the car had one.
+  const ghostTable = useMemo(
+    () =>
+      assets && ghostResult
+        ? buildLapTimeTable(assets.line.sM, ghostResult.vMps, ghostResult.dlM)
+        : null,
+    [assets, ghostResult],
   );
 
   const viewpoints = useMemo(
@@ -129,6 +202,7 @@ function Viewer() {
       assets
         ? buildViewpoints(
             assets.line,
+            assets.trackLines,
             assets.landmarks.corners,
             sceneCenter(assets),
             sceneExtent(assets),
@@ -217,20 +291,44 @@ function Viewer() {
         }
       : null;
 
+  if (!webglOk) {
+    return <AppState kind="webgl" title="This browser cannot draw the circuit" />;
+  }
   if (loadError) {
+    const failure = loadError instanceof CircuitLoadError ? loadError.failure : undefined;
     return (
       <AppState
         kind="error"
-        title="Could not load this circuit"
-        detail={loadError}
-        onRetry={() => setCircuitId((id) => id)}
+        title={
+          failure === "notfound"
+            ? `No circuit called "${circuitId}"`
+            : `Could not load ${trackDef.displayName}`
+        }
+        failure={failure}
+        detail={loadError.message}
+        onRetry={() => {
+          setLoadError(null);
+          setRetryNonce((n) => n + 1);
+        }}
         retryLabel="Try again"
+        tracks={TRACKS}
+        circuitId={circuitId}
+        onCircuitChange={(id) => {
+          setLoadError(null);
+          setCircuitId(id);
+        }}
       />
     );
   }
   if (!assets || !result || !table) {
     return <AppState kind="loading" title={trackDef.displayName} detail="loading circuit geometry" />;
   }
+
+  // what the chrome covers, in canvas pixels. The rail is a drawer on narrow screens rather than
+  // a persistent column, so it occludes nothing there; the dock's strip is always up.
+  const railW = narrow || showLanding ? 0 : sidePanel.expanded ? RAIL_EXPANDED_W : RAIL_COLLAPSED_W;
+  const dockH = showLanding ? 0 : dock.expanded ? DOCK_STRIP_H + DOCK_BODY_H : DOCK_STRIP_H;
+  const insets = { left: railW, bottom: dockH };
 
   const elevationRangeM = elevationRange(assets);
 
@@ -248,14 +346,16 @@ function Viewer() {
         // toggle, which is what made expanding a panel jolt rather than slide.
         gridTemplateAreas: showLanding ? `"view"` : `"top" "view"`,
         gridTemplateColumns: "1fr",
-        gridTemplateRows: showLanding ? "1fr" : "48px 1fr",
+        gridTemplateRows: showLanding ? "1fr" : `${TOPBAR_H}px 1fr`,
         width: "100%",
         height: "100%",
         position: "relative",
         background: "var(--bg)",
         // the rail's current width, published so the dock can start where the rail ends and the
-        // two animate as one gesture. The canvas ignores it entirely, which is the point.
-        ["--rail-w" as string]: narrow || showLanding ? "0px" : sidePanel.expanded ? "280px" : "56px",
+        // two animate as one gesture. The canvas still ignores it for sizing; the camera does
+        // not, because a frame composed for pixels the rail is covering is not composed at all.
+        ["--rail-w" as string]: `${railW}px`,
+        ["--dock-h" as string]: `${dockH}px`,
       }}
     >
       {!showLanding && (
@@ -302,6 +402,10 @@ function Viewer() {
         onGhostEnabledChange={setGhostEnabled}
         exaggeration={exaggeration}
         onExaggerationChange={setExaggeration}
+        showFurniture={showFurniture}
+        onShowFurnitureChange={setShowFurniture}
+        motionOn={!reducedMotion}
+        onMotionChange={(on) => setMotionOverride(on)}
         showPerf={showPerf}
         onShowPerfChange={setShowPerf}
         hoverInfo={hoverInfo}
@@ -315,6 +419,7 @@ function Viewer() {
         id="viewport"
         style={{ gridArea: "view", position: "relative", minWidth: 0, minHeight: 0, overflow: "hidden" }}
       >
+        <SceneBoundary title={trackDef.displayName}>
         <Scene
           assets={assets}
           result={result}
@@ -327,11 +432,14 @@ function Viewer() {
           speedMultiplier={speedMultiplier}
           exaggeration={exaggeration}
           showPerf={showPerf}
+          showFurniture={showFurniture}
           progressRef={progressRef}
           carPoseRef={carPoseRef}
           onHoverIndex={setHoverIndex}
           onUserTakeover={onUserTakeover}
+          insets={insets}
         />
+        </SceneBoundary>
         {!showLanding && (
           <>
             <ViewpointPill
@@ -359,6 +467,8 @@ function Viewer() {
         line={assets.line}
         result={result}
         table={table}
+        ghostTable={ghostTable}
+        mu={mu}
         corners={assets.landmarks.corners}
         progressRef={progressRef}
         onHoverIndex={setHoverIndex}

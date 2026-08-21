@@ -1,10 +1,16 @@
 // named camera positions. The interesting ones are generated, not authored: every corner in
-// TRACKS already carries an arc-length position, so for each one we can find the point on the
-// racing line, work out which way the line is bending there, and stand the camera on the outside
-// of the turn looking at the apex. "Show me Eau Rouge" costs one click and no new data.
+// landmarks.json already carries an arc-length position, so for each one we can find the point on
+// the centreline, work out which way the road is bending there, and stand the camera on the
+// outside of the turn looking at the apex. "Show me Eau Rouge" costs one click and no new data.
+//
+// The whole-circuit and start/finish shots are framed on the racing line, since they are about
+// where the car goes. The corner shots are framed on the centreline, since a corner's arc length
+// is a centreline arc length: see sampleCenterline in ./trackFrame for why those are not the same
+// number.
 
-import type { LineData } from "../assets";
+import type { LineData, TrackLines } from "../assets";
 import type { Corner } from "../assets";
+import { leftNormal } from "./trackFrame";
 
 export type ViewpointKind = "static" | "follow" | "chase";
 
@@ -20,12 +26,13 @@ export interface Viewpoint {
 const CORNER_OUT_M = 62; // how far outside the turn the camera stands
 const CORNER_UP_M = 26;
 
-function indexAtS(line: LineData, s: number): number {
-  // sM is monotonic; a proportional guess then a short local walk beats a binary search here
-  const n = line.nPoints;
-  let i = Math.min(Math.max(Math.round((s / line.loopLengthM) * (n - 1)), 0), n - 1);
-  while (i > 0 && line.sM[i] > s) i--;
-  while (i < n - 2 && line.sM[i + 1] < s) i++;
+/** index of the centreline point at an arc length. Corner data is in this frame. */
+function indexAtCenterlineS(lines: TrackLines, s: number): number {
+  const n = lines.nPoints;
+  const loop = lines.centerlineSM[n - 1];
+  let i = Math.min(Math.max(Math.round((s / loop) * (n - 1)), 0), n - 1);
+  while (i > 0 && lines.centerlineSM[i] > s) i--;
+  while (i < n - 2 && lines.centerlineSM[i + 1] < s) i++;
   return i;
 }
 
@@ -33,29 +40,33 @@ function indexAtS(line: LineData, s: number): number {
  * Camera pose for a corner: stand on the outside of the turn, at apex height, looking in.
  * The outside direction comes from the discrete acceleration of the path (the second difference
  * of position), which points at the centre of curvature; the camera goes the other way.
+ *
+ * Framed on the **centreline**, because corner.sM is a centreline arc length: see sampleCenterline
+ * in ./trackFrame. Resolving it on the racing line aimed the camera up to 16 m along the road from
+ * the apex it is named after, which at 62 m out is most of a corner's worth of framing error.
  */
-function cornerViewpoint(line: LineData, corner: Corner, yScale: number): Viewpoint {
-  const n = line.nPoints;
-  const i = indexAtS(line, corner.sM);
+function cornerViewpoint(lines: TrackLines, corner: Corner, yScale: number): Viewpoint {
+  const n = lines.nPoints;
+  const i = indexAtCenterlineS(lines, corner.sM);
   const prev = (i - 12 + n) % n;
   const next = (i + 12) % n;
 
-  const px = line.positionYup[3 * i];
-  const py = line.positionYup[3 * i + 1] * yScale;
-  const pz = line.positionYup[3 * i + 2];
+  const px = lines.centerline[3 * i];
+  const py = lines.centerline[3 * i + 1] * yScale;
+  const pz = lines.centerline[3 * i + 2];
 
   // second difference in the ground plane: points toward the inside of the corner
-  let ix = line.positionYup[3 * prev] + line.positionYup[3 * next] - 2 * px;
-  let iz = line.positionYup[3 * prev + 2] + line.positionYup[3 * next + 2] - 2 * pz;
+  let ix = lines.centerline[3 * prev] + lines.centerline[3 * next] - 2 * px;
+  let iz = lines.centerline[3 * prev + 2] + lines.centerline[3 * next + 2] - 2 * pz;
   const inLen = Math.hypot(ix, iz);
 
   if (inLen < 1e-6) {
     // effectively straight: fall back to the left-hand normal so the camera still frames the road
-    const tx = line.positionYup[3 * next] - line.positionYup[3 * prev];
-    const tz = line.positionYup[3 * next + 2] - line.positionYup[3 * prev + 2];
-    const tLen = Math.max(Math.hypot(tx, tz), 1e-6);
-    ix = -tz / tLen;
-    iz = tx / tLen;
+    const tx = lines.centerline[3 * next] - lines.centerline[3 * prev];
+    const tz = lines.centerline[3 * next + 2] - lines.centerline[3 * prev + 2];
+    const [lx, lz] = leftNormal(tx, tz);
+    ix = lx;
+    iz = lz;
   } else {
     ix /= inLen;
     iz /= inLen;
@@ -72,6 +83,7 @@ function cornerViewpoint(line: LineData, corner: Corner, yScale: number): Viewpo
 
 export function buildViewpoints(
   line: LineData,
+  trackLines: TrackLines,
   corners: Corner[],
   center: readonly [number, number, number],
   extent: number,
@@ -114,6 +126,6 @@ export function buildViewpoints(
     },
     { id: "follow", label: "Follow", kind: "follow" },
     { id: "chase", label: "Chase (low)", kind: "chase" },
-    ...corners.map((c) => cornerViewpoint(line, c, yScale)),
+    ...corners.map((c) => cornerViewpoint(trackLines, c, yScale)),
   ];
 }

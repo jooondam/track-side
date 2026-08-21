@@ -2,8 +2,8 @@
 // expanded it is five labelled groups. Replaces the old single 250px box that carried eight
 // ungrouped rows of buttons and never got out of the way of the circuit.
 
-import { Button, ButtonGroup, IconButton, Panel, Section, Select, Slider, Stat } from "./primitives";
-import { formatLapTime } from "./TopBar";
+import { Button, ButtonGroup, Check, IconButton, Panel, Section, Select, Slider, Stat } from "./primitives";
+import { TOPBAR_H, formatLapTime } from "./TopBar";
 import type { Expandable } from "./useExpandable";
 import type { ColorMode } from "../render/RacingLine";
 import type { Viewpoint } from "../render/viewpoints";
@@ -39,12 +39,22 @@ interface SidePanelProps {
   onGhostEnabledChange: (enabled: boolean) => void;
   exaggeration: number;
   onExaggerationChange: (factor: number) => void;
+  showFurniture: boolean;
+  onShowFurnitureChange: (show: boolean) => void;
+  motionOn: boolean;
+  onMotionChange: (on: boolean) => void;
   showPerf: boolean;
   onShowPerfChange: (show: boolean) => void;
   hoverInfo: HoverInfo | null;
 }
 
 const PRIMARY_VIEWS = ["overview", "top", "start", "follow", "chase"];
+
+// the rail's two widths, exported because App has to publish them as --rail-w *and* hand the
+// same numbers to the camera as an inset. Two copies of 280 is exactly how the camera ends up
+// composing for a frame that no longer exists.
+export const RAIL_COLLAPSED_W = 68;
+export const RAIL_EXPANDED_W = 280;
 
 export function SidePanel(props: SidePanelProps) {
   const { panel, narrow, drawerOpen } = props;
@@ -62,7 +72,7 @@ export function SidePanel(props: SidePanelProps) {
 
   const narrowStyle: React.CSSProperties = {
     position: "fixed",
-    top: 48,
+    top: TOPBAR_H,
     left: 0,
     bottom: 0,
     zIndex: 25,
@@ -82,7 +92,7 @@ export function SidePanel(props: SidePanelProps) {
         // resize the canvas underneath. `width` still animates, but now only this element
         // relayouts rather than the whole frame plus the WebGL buffer.
         position: "absolute",
-        top: 48,
+        top: TOPBAR_H,
         left: 0,
         bottom: 0,
         zIndex: 20,
@@ -131,7 +141,7 @@ export function SidePanel(props: SidePanelProps) {
               onPointerDown={() => panel.setHold(true)}
               onPointerUp={() => panel.setHold(false)}
             />
-            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
               re-solved in <span className="tnum">{props.solveMs.toFixed(1)} ms</span>
             </div>
           </Section>
@@ -152,7 +162,7 @@ export function SidePanel(props: SidePanelProps) {
                 style={{
                   paddingTop: "var(--s2)",
                   borderTop: "1px solid var(--line)",
-                  fontSize: 11,
+                  fontSize: 12,
                   color: "var(--text-muted)",
                   lineHeight: 1.7,
                 }}
@@ -196,10 +206,10 @@ export function SidePanel(props: SidePanelProps) {
 
           <Section label="Playback">
             <Button
-              variant="primary"
               size="md"
+              active={props.playing}
               onClick={() => props.onPlayingChange(!props.playing)}
-              style={{ width: "100%" }}
+              style={{ alignSelf: "flex-start", minWidth: 108 }}
             >
               {props.playing ? "❙❙  Pause" : "▶  Play"}
             </Button>
@@ -214,12 +224,12 @@ export function SidePanel(props: SidePanelProps) {
                 </Button>
               ))}
             </ButtonGroup>
-            <Button
-              active={props.ghostEnabled}
-              onClick={() => props.onGhostEnabledChange(!props.ghostEnabled)}
-            >
-              ghost car at μ1.20
-            </Button>
+            <Check
+              label="Ghost car"
+              note="a second solve at the reference grip, μ1.20"
+              checked={props.ghostEnabled}
+              onChange={props.onGhostEnabledChange}
+            />
           </Section>
 
           <Section label="Display">
@@ -245,9 +255,18 @@ export function SidePanel(props: SidePanelProps) {
                 </Button>
               ))}
             </ButtonGroup>
-            <Button active={props.showPerf} onClick={() => props.onShowPerfChange(!props.showPerf)}>
-              render stats
-            </Button>
+            {/* fences, marker boards and buildings carry no information about the line, so
+                anyone reading the line gets to turn them off */}
+            <Check
+              label="Trackside furniture"
+              checked={props.showFurniture}
+              onChange={props.onShowFurnitureChange}
+            />
+            {/* the OS's prefers-reduced-motion decides this until someone says otherwise. It
+                used to decide it silently and permanently, which is indistinguishable from the
+                animation being broken. */}
+            <Check label="Scene motion" checked={props.motionOn} onChange={props.onMotionChange} />
+            <Check label="Render stats" checked={props.showPerf} onChange={props.onShowPerfChange} />
           </Section>
         </>
       ) : (
@@ -280,10 +299,10 @@ function CollapsedRail({
     borderBottom: "1px solid var(--line)",
   };
   const cap: React.CSSProperties = {
-    fontSize: 9,
-    letterSpacing: "0.08em",
+    fontSize: 12,
+    letterSpacing: "0.06em",
     textTransform: "uppercase",
-    color: "var(--text-dim)",
+    color: "var(--text-muted)",
   };
   // 56px will not hold "2:28.416" at a readable size, so the rail drops the milliseconds; the
   // full-precision number is always in the top bar anyway
@@ -291,7 +310,7 @@ function CollapsedRail({
   const seconds = lapTimeS - minutes * 60;
   const shortLap = `${minutes}:${seconds.toFixed(1).padStart(4, "0")}`;
   return (
-    <div>
+    <div style={{ position: "relative", height: "100%" }}>
       <div style={cell}>
         {/* no uppercase transform here: it turns the mu into a capital Mu, which reads as "M" */}
         <div style={{ ...cap, textTransform: "none" }}>grip μ</div>
@@ -313,6 +332,26 @@ function CollapsedRail({
         >
           {playing ? "❙❙" : "▶"}
         </IconButton>
+      </div>
+      {/* the critique found the rail gave no sign at all that it opened: no chevron, no grip, no
+          edge treatment, so on desktop the only route in was an invisible hover. This is the
+          permanent affordance. It is decorative to assistive tech because the region already
+          expands on focus and the pin button carries the real accessible name. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          right: 0,
+          top: "50%",
+          transform: "translateY(-50%)",
+          padding: "var(--s3) 2px",
+          borderLeft: "1px solid var(--line)",
+          fontSize: 12,
+          lineHeight: 1,
+          color: "var(--text-muted)",
+        }}
+      >
+        ›
       </div>
     </div>
   );
@@ -348,7 +387,7 @@ export function ViewpointPill({
         style={{
           minWidth: 110,
           textAlign: "center",
-          fontSize: 11,
+          fontSize: 12,
           letterSpacing: "0.06em",
           textTransform: "uppercase",
           color: "var(--text-muted)",

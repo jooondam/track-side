@@ -7,7 +7,7 @@
 // dim greys are exactly as light/dark as they need to be to clear 4.5:1 on their own panel, which
 // is why they look less subtle than the values they replaced.
 
-import { createContext, createElement, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, createElement, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 export type ThemeName = "dark" | "light";
@@ -73,14 +73,14 @@ export interface ThemeTokens {
   carBody: string;
   carCarbon: string;
   carGlass: string;
-  // phase palette: green accelerating, red braking, neutral holding. the traffic-light reading,
-  // which is what nearly everyone expects a racing line to mean without being told.
+  // phase palette: blue pencil accelerating, red pencil braking, graphite holding. These are the
+  // two colours actually on an engineer's marked-up sheet, and they are chosen over the
+  // traffic-light reading for a reason that outranks familiarity.
   //
-  // red-green is also the axis lost in deuteranopia and protanopia, roughly 8% of men, so the
-  // two are separated on a **second** channel as well: the green is much lighter than the red
-  // (roughly 76 vs 55 in perceptual lightness). A dichromat sees both as similar hues but at
-  // clearly different brightness, so the line stays readable without relying on the hue alone.
-  // Do not "balance" these to equal lightness; the difference is the accessibility mechanism.
+  // red against green is the axis lost in deuteranopia and protanopia, roughly 8% of men, and
+  // phase is the core encoding of this entire tool. Red against blue survives all three common
+  // deficiencies. The pair is separated on lightness as well (roughly 51 against 35 in L*), so
+  // the hue is never doing the work alone; do not "balance" these to equal lightness.
   //
   // coast sits at low chroma so it recedes, leaving the line reading as two active phases
   // separated by gaps rather than three competing bands.
@@ -95,108 +95,113 @@ export interface ThemeTokens {
 }
 
 export const THEMES: Record<ThemeName, ThemeTokens> = {
+  // the run book read under a work lamp: the desk in shadow, warm paper, pencil that has gone
+  // amber. Deliberately not near-black with a neon accent, which is the chrome this redesign
+  // exists to leave; every value here is warm because a lamp is warm.
   dark: {
-    bg: "#08090c",
-    panel: "#10121a",
-    panelRaised: "#171a25",
-    line: "#1e2230",
-    lineStrong: "#2c3242",
-    text: "#e8eaf0",
-    textMuted: "#949cad", // 6.8:1 on panel
-    textDim: "#767e8e", // 4.6:1 on panel
-    accent: "#ff5c1a", // 6.1:1 on panel
-    accentDim: "#2e1a10",
-    accentOn: "#ff7a45", // 6.4:1 on accentDim
-    accentContrast: "#08090c",
-    pos: "#3ecf8e",
-    neg: "#ff5f56",
-    sceneBg: "#0b0e14",
-    sceneFog: "#131a26",
-    asphalt: "#26292f",
-    edge: "#d9dde6",
-    gridCell: "#141721",
-    gridSection: "#1e2230",
-    // these read as *rendered* colours now. The values they replaced were written straight into
-    // a vertex buffer without an sRGB decode, so #16241c actually reached the screen as a milky
-    // #718e7e that nobody authored; correcting the conversion made the same hexes near-black,
-    // hence the retune. Deeper and more saturated than what shipped, on purpose: the racing line
-    // is the one thing in the scene allowed to glow, and the ground has to lose that contest.
-    terrainLo: "#2e5c42",
-    terrainMid: "#5a6640",
-    terrainHi: "#8b8059",
-    terrainGlow: 1.15,
-    skyZenith: "#05070f",
-    skySun: "#ff8a3d",
-    skySunIntensity: 0.3,
-    skyHorizonSharp: 0.4,
-    skyStars: 0.55,
-    fogDensityK: 0.62,
-    // these are *unlit* base tones and the scene puts about 2.3 of combined key, hemisphere and
-    // environment on them, so they land a good deal lighter than they read here. Tuned by
-    // screenshot: gravel has to be clearly lighter than the asphalt without becoming the
-    // brightest thing in the frame, and it has to stay dark enough that the white edge line
-    // painted at the road's boundary still reads against it.
-    apronLip: "#55585d",
-    apronGravel: "#4e483d",
-    apronGrass: "#26331f",
-    carBody: "#ff5c1a",
-    carCarbon: "#15171d",
-    carGlass: "#0c1218",
-    phaseAccel: "#35d96a",
-    phaseBrake: "#e8402e",
-    phaseCoast: "#5d6472",
-    lightKey: 1.5,
-    lightHemiSky: "#1c2534",
-    lightHemiGround: "#0b0d12",
-    lightHemi: 0.8,
-  },
-  light: {
-    bg: "#eef0f3",
-    panel: "#ffffff",
-    panelRaised: "#f6f7f9",
-    line: "#d6dae1",
-    lineStrong: "#b8bfc9",
-    text: "#14161a",
-    textMuted: "#5c6472", // 6.0:1 on panel
-    textDim: "#6b7382", // 4.8:1 on panel
-    accent: "#d92e14", // 4.8:1 on panel
-    accentDim: "#fdeae6",
-    accentOn: "#a81f0d", // 6.3:1 on accentDim
-    accentContrast: "#ffffff",
-    pos: "#0a7d49",
-    neg: "#c62828",
-    sceneBg: "#dfe4ea",
-    sceneFog: "#d7e2ec",
-    asphalt: "#4c5158",
-    edge: "#ffffff",
-    gridCell: "#dfe2e7",
-    gridSection: "#c9ced6",
-    terrainLo: "#7f9a76",
-    terrainMid: "#95906f",
-    terrainHi: "#aa9f81",
-    terrainGlow: 0.85,
-    skyZenith: "#7fa9d6",
-    skySun: "#fff4dc",
-    skySunIntensity: 0.18,
-    skyHorizonSharp: 0.55,
+    bg: "#16130f",
+    panel: "#201c16",
+    panelRaised: "#2a251d",
+    line: "#3a342a",
+    lineStrong: "#554d40",
+    text: "#f2ece0", // 14.3:1 on panel
+    textMuted: "#b8ac96", // 7.4:1 on panel
+    textDim: "#948976", // 4.7:1 on panel
+    accent: "#e8603f", // 5.0:1 on panel
+    accentDim: "#3a2119",
+    accentOn: "#f0876a",
+    accentContrast: "#16130f",
+    pos: "#6fb0e0",
+    neg: "#e8603f",
+    sceneBg: "#16130f",
+    sceneFog: "#221d16",
+    asphalt: "#4a443a",
+    edge: "#efe8db",
+    gridCell: "#1d1913",
+    gridSection: "#2b251c",
+    // contour tints, not a landscape: the diagram block is printed, so elevation reads as ranked
+    // ink weights rather than as grass and rock
+    terrainLo: "#2e3a44",
+    terrainMid: "#44505c",
+    terrainHi: "#5f6c78",
+    terrainGlow: 0.9,
+    skyZenith: "#16130f",
+    skySun: "#3a2f22",
+    skySunIntensity: 0.12,
+    skyHorizonSharp: 0.5,
     skyStars: 0,
-    // more haze than the dark theme needs: a dark terrain edge against a light sky has further
-    // to travel to disappear than a dark edge against a dark one
-    fogDensityK: 0.7,
-    apronLip: "#83888f",
-    apronGravel: "#6f6552",
-    apronGrass: "#48603d",
-    carBody: "#d92e14",
-    carCarbon: "#2a2d34",
-    carGlass: "#4a5560",
-    phaseAccel: "#1a9e4b",
-    phaseBrake: "#c11f10",
-    phaseCoast: "#737a88",
-    lightKey: 1.2,
-    lightHemiSky: "#f2f4f8",
-    lightHemiGround: "#8c8f96",
-    lightHemi: 1.0,
+    fogDensityK: 0.62,
+    apronLip: "#4f4941",
+    apronGravel: "#453e33",
+    apronGrass: "#33352b",
+    carBody: "#e8603f",
+    carCarbon: "#241f19",
+    carGlass: "#3a3931",
+    // red and blue pencil, the two colours actually on an engineer's sheet. Red against blue
+    // survives all three common colour-vision deficiencies where red against green does not, and
+    // the pair is separated on lightness as well (roughly 51 against 35 in L*) so the hue is
+    // never doing the work alone. The donated discipline goes further: phase is also carried by
+    // stroke weight, so a monochrome print of this screen still reads.
+    phaseAccel: "#6fb0e0",
+    phaseBrake: "#e8603f",
+    phaseCoast: "#948976",
+    lightKey: 1.35,
+    lightHemiSky: "#2b2519",
+    lightHemiGround: "#14110d",
+    lightHemi: 0.9,
   },
+  // the white top sheet, in daylight. This is the primary rendition and the default: the physical
+  // scene is an engineer at a laptop reading something they would otherwise read on paper, and
+  // paper is read in light.
+  light: {
+    bg: "#d6d2c7", // the manila binder the sheet sits on
+    panel: "#fbfaf7", // bond paper, deliberately not cream
+    panelRaised: "#f4f1e8", // the canary duplicate
+    line: "#b9c4d4", // the printed grid, process blue at working strength
+    lineStrong: "#2a2f36",
+    text: "#16191d", // 17.3:1 on panel
+    textMuted: "#4e5560", // 7.2:1 on panel
+    textDim: "#6b7280", // 4.6:1 on panel
+    accent: "#c8102e", // red pencil, 5.7:1 on panel
+    accentDim: "#f7dbe0",
+    accentOn: "#8f0b20",
+    accentContrast: "#fbfaf7",
+    pos: "#1b5e9c", // blue pencil, 6.5:1 on panel
+    neg: "#c8102e",
+    sceneBg: "#fbfaf7",
+    sceneFog: "#fbfaf7",
+    asphalt: "#6f7681",
+    edge: "#16191d",
+    gridCell: "#e7e3d8",
+    gridSection: "#cfd6e0",
+    terrainLo: "#dbe3ec",
+    terrainMid: "#b4c3d6",
+    terrainHi: "#8496ae",
+    terrainGlow: 0.8,
+    skyZenith: "#fbfaf7",
+    skySun: "#fbfaf7",
+    skySunIntensity: 0,
+    skyHorizonSharp: 1,
+    skyStars: 0,
+    // paper-coloured fog on a paper page hides more than the terrain plate's far edge: at
+    // overview distance it was dissolving the far half of the circuit into the sheet, leaving
+    // corner labels hanging over blank paper. The plate's tints are already within a few percent
+    // of the ground, so it needs almost no haze to lose its own edge.
+    fogDensityK: 0.13,
+    apronLip: "#e6e2d8",
+    apronGravel: "#ddd6c6",
+    apronGrass: "#dfe4d8",
+    carBody: "#c8102e",
+    carCarbon: "#3a4048",
+    carGlass: "#aebccd",
+    phaseAccel: "#2f7dc4", // 4.2:1 on paper, L* 51
+    phaseBrake: "#a8102a", // 7.4:1 on paper, L* 35
+    phaseCoast: "#8a9099", // 3.1:1 on paper, recedes
+    lightKey: 1.55,
+    lightHemiSky: "#ffffff",
+    lightHemiGround: "#d6d2c7",
+    lightHemi: 1.6,
+  }
 };
 
 /**
@@ -218,7 +223,10 @@ export const MATERIAL = {
 
 // spacing, radius, motion and type are theme-independent
 export const SPACE = { s1: 4, s2: 8, s3: 12, s4: 16, s5: 24, s6: 32 } as const;
-export const RADIUS = { sm: 2, md: 3, lg: 4 } as const;
+// paper is cut square. Nothing in a run book has a rounded corner, and the 2-to-4px radii that
+// were here are the single cheapest tell that a surface was assembled from a component library
+// rather than drawn.
+export const RADIUS = { sm: 0, md: 0, lg: 0 } as const;
 export const MOTION = {
   // easeOutQuint: most of the travel happens early, so a panel feels like it is settling into
   // place rather than decelerating into it. `base` is the panel open/close duration; at 240 ms
@@ -380,9 +388,27 @@ const STORAGE_KEY = "track-side:theme";
 // dark is the design's home: the circuit is lit to be the brightest thing on screen, and the
 // light theme is the alternative rather than the default. Only an explicit stored choice moves
 // it, so a light OS preference does not quietly ship a different product.
+//
+// ?theme= wins over the stored choice, because a link that says "look at this in the light
+// theme" has to survive being opened by someone whose last session was dark. It deliberately
+// does not write to storage: following a link should not repaint the recipient's next visit.
+function urlTheme(): ThemeName | null {
+  const t = new URLSearchParams(window.location.search).get("theme");
+  return t === "light" || t === "dark" ? t : null;
+}
+
+function themeCameFromUrl(): boolean {
+  return urlTheme() !== null;
+}
+
 function initialTheme(): ThemeName {
+  const fromUrl = urlTheme();
+  if (fromUrl) return fromUrl;
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === "light" ? "light" : "dark";
+  // the top sheet is the default now, not the lamp. The scene the product is actually used in is
+  // an engineer at a laptop in daylight reading a working document, and that forces light; dark
+  // is the same run book under a work lamp, kept as a real choice rather than as the default.
+  return stored === "dark" ? "dark" : "light";
 }
 
 interface ThemeContextValue {
@@ -399,9 +425,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     ensureStylesheet();
     return initialTheme();
   });
+  // a theme that arrived by link is not a choice the visitor made, so the first pass skips the
+  // write. Toggling afterwards is a choice, and does persist.
+  const fromLink = useRef(themeCameFromUrl());
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    if (fromLink.current) {
+      fromLink.current = false;
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 

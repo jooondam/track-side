@@ -19,7 +19,15 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CircuitAssets, Landmarks as LandmarkData } from "../assets";
 import { BOARD_ATLAS_COLUMNS, BOARD_ATLAS_ROWS, boardAtlas, boardFaceIndex } from "./textures";
-import { buildStructure, type Placement } from "./structures/generators";
+import { buildStructure } from "./structures/generators";
+import {
+  leftNormal,
+  outboard,
+  sampleBoundary,
+  sampleCenterline,
+  type Frame,
+  type Side,
+} from "./trackFrame";
 
 // visibility bands, in metres of camera **altitude above the circuit**, with hysteresis so a
 // group cannot flicker when the camera sits exactly on a threshold.
@@ -35,6 +43,10 @@ const HYSTERESIS_M = 60;
 const FENCE_PITCH_M = 20;
 const FENCE_OUTBOARD_M = 9;
 const FENCE_HEIGHT_M = 2.6;
+
+// how far outboard of the road edge boards and signs stand. Real marker boards sit just past the
+// verge, and 4 m clears the kerbs (1.1 m wide, on the edge) with room for the panel to overhang.
+const BOARD_OUTBOARD_M = 4;
 
 // **There are no trees.** tree_line structures stay in landmarks.json because they are real
 // features of both circuits and the schema should keep recording them, but nothing renders
@@ -54,47 +66,46 @@ interface LandmarksProps {
   exaggeration: number;
 }
 
-/** interpolate the racing line's position and ground-plane tangent at an arc length. */
-function sampleLine(assets: CircuitAssets, s: number): Placement {
-  const line = assets.line;
-  const n = line.nPoints;
-  const loop = line.loopLengthM;
-  const q = ((s % loop) + loop) % loop;
-  let i = Math.min(Math.max(Math.round((q / loop) * (n - 1)), 0), n - 1);
-  while (i > 0 && line.sM[i] > q) i--;
-  while (i < n - 2 && line.sM[i + 1] < q) i++;
-  const j = Math.min(i + 1, n - 1);
-  const f = (q - line.sM[i]) / Math.max(line.sM[j] - line.sM[i], 1e-9);
-
-  const x = line.positionYup[3 * i] + f * (line.positionYup[3 * j] - line.positionYup[3 * i]);
-  const y =
-    line.positionYup[3 * i + 1] + f * (line.positionYup[3 * j + 1] - line.positionYup[3 * i + 1]);
-  const z =
-    line.positionYup[3 * i + 2] + f * (line.positionYup[3 * j + 2] - line.positionYup[3 * i + 2]);
-
-  const ahead = (j + 6) % (n - 1);
-  let tx = line.positionYup[3 * ahead] - x;
-  let tz = line.positionYup[3 * ahead + 2] - z;
-  const len = Math.max(Math.hypot(tx, tz), 1e-6);
-  tx /= len;
-  tz /= len;
-  return { x, y, z, tx, tz };
+/** ground height at a world point, taken from the nearest centreline sample. */
+function groundYNear(assets: CircuitAssets, x: number, z: number): number {
+  const c = assets.trackLines.centerline;
+  let best = Infinity;
+  let bestY = 0;
+  for (let i = 0; i < assets.trackLines.nPoints; i++) {
+    const d = (c[3 * i] - x) ** 2 + (c[3 * i + 2] - z) ** 2;
+    if (d < best) {
+      best = d;
+      bestY = c[3 * i + 1];
+    }
+  }
+  return bestY;
 }
 
-/** every board and turn sign on the circuit, as flat instance data. */
+/**
+ * every board and turn sign on the circuit, as flat instance data.
+ *
+ * Positions come off the **road edge**, not off the racing line. They used to be a flat 11 m
+ * from the line, which put 5 of 141 markers on the racing surface at Spa, up to 4.58 m inside
+ * the edge: the line is not the middle of the road, and at an apex 11 m from it crosses the
+ * whole 9.8 m carriageway. See sampleBoundary in ./trackFrame.
+ */
 function boardInstances(landmarks: LandmarkData, assets: CircuitAssets) {
-  const out: { p: Placement; side: number; face: string }[] = [];
+  const out: { frame: Frame; side: Side; face: string }[] = [];
   for (const corner of landmarks.corners) {
-    const side = corner.boardSide === "left" ? 1 : -1;
+    const side: Side = corner.boardSide === "left" ? "left" : "right";
     for (const board of corner.boards) {
       const face = String(board.distanceM);
       if (boardFaceIndex(face) < 0) continue;
-      out.push({ p: sampleLine(assets, board.sM), side, face });
+      out.push({ frame: sampleBoundary(assets.trackLines, board.sM, side), side, face });
     }
     // one turn sign at the corner itself, if the number has a numeral in the atlas
     const numberFace = String(corner.number);
     if (boardFaceIndex(numberFace) >= 0) {
-      out.push({ p: sampleLine(assets, corner.turnInSM), side, face: numberFace });
+      out.push({
+        frame: sampleBoundary(assets.trackLines, corner.turnInSM, side),
+        side,
+        face: numberFace,
+      });
     }
   }
   return out;
@@ -119,50 +130,68 @@ export function Landmarks({ assets, exaggeration }: LandmarksProps) {
   const structures = useMemo(() => {
     const parts: THREE.BufferGeometry[] = [];
     for (const s of assets.landmarks.structures) {
+      // a 'world' structure carries its own x and z, but not its height. Sampling the nearest
+      // centreline point gives it the circuit's own ground level, which is what stops Monza's
+      // banking being drawn at sea level and passing through a road that sits 6 m up.
+      const worldPlacement =
+        s.placement === "world" && s.polylineXz.length > 0
+          ? (() => {
+              const [cx, cz] = s.polylineXz.reduce(
+                (acc, [x, z]) => [acc[0] + x / s.polylineXz.length, acc[1] + z / s.polylineXz.length],
+                [0, 0],
+              );
+              return { x: 0, y: groundYNear(assets, cx, cz) * exaggeration, z: 0, tx: 1, tz: 0 };
+            })()
+          : null;
+
       const placement =
         s.placement === "track" && s.sM !== undefined
           ? (() => {
-              const base = sampleLine(assets, s.sM);
-              // offset_m is signed from the centreline; the left normal is (-tz, tx)
+              // the centreline, not the racing line: offset_m is signed *from the centreline*
+              // and s_m is a centreline arc length. Sampling the racing line put the near leg of
+              // three of Spa's four gantries on the racing surface, worst 6.9 m inside it.
+              const base = sampleCenterline(assets.trackLines, s.sM);
+              // positive offset is to the driver's left. The old expression used (-tz, tx),
+              // which is the *right* normal, so every offset structure stood on the wrong side.
+              const [lx, lz] = leftNormal(base.tx, base.tz);
               return {
                 ...base,
-                x: base.x + -base.tz * s.offsetM,
-                z: base.z + base.tx * s.offsetM,
+                x: base.x + lx * s.offsetM,
+                y: base.y * exaggeration,
+                z: base.z + lz * s.offsetM,
               };
             })()
-          : null;
+          : worldPlacement;
       const geometry = buildStructure(s, placement);
       if (geometry) parts.push(geometry);
     }
     return parts.length ? mergeGeometries(parts, false) : null;
-  }, [assets]);
+  }, [assets, exaggeration]);
 
-  // fence posts, walked off the boundary polyline rather than authored
+  // fence posts, walked off the boundary polyline rather than authored.
+  //
+  // Two fixes here. The outboard sign was inverted, which pushed both rows *across* the road:
+  // 463 of the ~700 posts at Spa stood on the racing surface, the deepest 7.55 m inside the
+  // edge. And the pitch was applied as an index step, so it only meant 20 m because the
+  // boundaries happen to be resampled at exactly 1.0 m; it now walks the arc length, which is
+  // what the constant has always claimed to be.
   const fence = useMemo(() => {
     const lines = assets.trackLines;
     const matrices: THREE.Matrix4[] = [];
     const dummy = new THREE.Object3D();
-    for (const source of [lines.boundaryLeft, lines.boundaryRight]) {
-      const count = source.length / 3;
-      const step = Math.max(1, Math.round(FENCE_PITCH_M));
-      for (let i = 0; i < count - 1; i += step) {
-        const x = source[3 * i];
-        const y = source[3 * i + 1];
-        const z = source[3 * i + 2];
-        const nx = source[3 * Math.min(i + step, count - 1)] - x;
-        const nz = source[3 * Math.min(i + step, count - 1) + 2] - z;
-        const len = Math.max(Math.hypot(nx, nz), 1e-6);
-        // outboard is the left normal of the travel direction, pushed away from the road
-        const ox = (-nz / len) * FENCE_OUTBOARD_M * (source === lines.boundaryLeft ? 1 : -1);
-        const oz = (nx / len) * FENCE_OUTBOARD_M * (source === lines.boundaryLeft ? 1 : -1);
-        dummy.position.set(x + ox, y + FENCE_HEIGHT_M / 2, z + oz);
-        dummy.rotation.set(0, Math.atan2(-nz, nx), 0);
+    const loop = lines.centerlineSM[lines.nPoints - 1];
+    for (const side of ["left", "right"] as Side[]) {
+      for (let s = 0; s < loop; s += FENCE_PITCH_M) {
+        const frame = sampleBoundary(lines, s, side);
+        const [px, pz] = outboard(frame, side, FENCE_OUTBOARD_M);
+        dummy.position.set(px, frame.y * exaggeration + FENCE_HEIGHT_M / 2, pz);
+        dummy.rotation.set(0, Math.atan2(-frame.tz, frame.tx), 0);
         dummy.updateMatrix();
         matrices.push(dummy.matrix.clone());
       }
     }
     return matrices;
-  }, [assets]);
+  }, [assets, exaggeration]);
 
   // per-instance atlas cell, consumed by the shader patch below
   const boardUv = useMemo(() => {
@@ -212,22 +241,22 @@ export function Landmarks({ assets, exaggeration }: LandmarksProps) {
     if (fenceRef.current) fenceRef.current.instanceMatrix.needsUpdate = true;
 
     boards.forEach((b, i) => {
-      const ox = -b.p.tz * b.side * 11;
-      const oz = b.p.tx * b.side * 11;
-      const yaw = Math.atan2(-b.p.tz, b.p.tx);
-      dummy.position.set(b.p.x + ox, b.p.y + BOARD_POST_H / 2, b.p.z + oz);
+      const [px, pz] = outboard(b.frame, b.side, BOARD_OUTBOARD_M);
+      const yaw = Math.atan2(-b.frame.tz, b.frame.tx);
+      const groundY = b.frame.y * exaggeration;
+      dummy.position.set(px, groundY + BOARD_POST_H / 2, pz);
       dummy.rotation.set(0, yaw, 0);
       dummy.scale.setScalar(1);
       dummy.updateMatrix();
       postRef.current?.setMatrixAt(i, dummy.matrix);
 
-      dummy.position.set(b.p.x + ox, b.p.y + BOARD_POST_H + BOARD_PANEL / 2, b.p.z + oz);
+      dummy.position.set(px, groundY + BOARD_POST_H + BOARD_PANEL / 2, pz);
       dummy.updateMatrix();
       panelRef.current?.setMatrixAt(i, dummy.matrix);
     });
     if (postRef.current) postRef.current.instanceMatrix.needsUpdate = true;
     if (panelRef.current) panelRef.current.instanceMatrix.needsUpdate = true;
-  }, [fence, boards]);
+  }, [fence, boards, exaggeration]);
 
   useFrame(({ camera }) => {
     const target = midRef.current;
@@ -249,7 +278,12 @@ export function Landmarks({ assets, exaggeration }: LandmarksProps) {
   });
 
   return (
-    <group scale={[1, exaggeration, 1]}>
+    // **No Y scale on this group.** It used to carry scale={[1, exaggeration, 1]}, which stretched
+    // the objects as well as their positions: at 3x elevation a 2.6 m fence post became a 7.8 m
+    // pole and the pit building grew three storeys. Every placement above multiplies its own
+    // ground height by exaggeration instead, so the furniture rides the exaggerated terrain at
+    // life size. Same split CarMarker.tsx and CornerLabels.tsx already use.
+    <group>
       {/* mid band: the big silhouettes, visible until the whole circuit is in frame */}
       <group ref={midRef}>
         {structures && (

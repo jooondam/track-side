@@ -2,21 +2,70 @@
 // three were either a bare string at padding: 40 or a blank canvas.
 //
 // The error copy names the thing that failed and offers the one action that might fix it, rather
-// than printing an exception at the user. It also distinguishes an offline browser from a
-// genuinely missing asset, because those need different things from the reader.
+// than printing an exception at the user. Which action that is depends on why it failed: a
+// circuit that does not exist needs a different circuit, not a retry, so the picker ships on the
+// card itself and a shared link with a stale ?circuit= stops being a dead end.
+//
+// The raw message is kept, because "it said something about a doctype" is the only useful thing a
+// reader can relay to whoever wrote this. It is just not the headline.
 
-import { Button, Panel } from "./primitives";
+import type { LoadFailure } from "../assets";
+import type { TrackDefinition } from "../tracks";
+import { Button, Panel, Select } from "./primitives";
 
 interface AppStateProps {
-  kind: "loading" | "error";
+  kind: "loading" | "error" | "webgl";
   title: string;
+  /** the raw failure text, shown under a disclosure rather than as the message */
   detail?: string;
+  failure?: LoadFailure;
+  /** overrides the copy derived from `failure`, for failures that are not a load at all */
+  message?: string;
   onRetry?: () => void;
   retryLabel?: string;
+  /** offered on the error card so a bad ?circuit= always has a way out */
+  tracks?: readonly TrackDefinition[];
+  circuitId?: string;
+  onCircuitChange?: (id: string) => void;
 }
 
-export function AppState({ kind, title, detail, onRetry, retryLabel }: AppStateProps) {
+/** what actually went wrong, in the second person, plus what to do about it. */
+function explain(failure: LoadFailure | undefined, offline: boolean): string {
+  if (offline || failure === "offline") {
+    return "Your browser is offline, so the circuit data could not be fetched. Reconnect and try again.";
+  }
+  switch (failure) {
+    case "notfound":
+      return "There is no circuit at that address. Pick one below, or check the link you followed.";
+    case "malformed":
+      return "The circuit data downloaded but could not be read. It may have been served only partly.";
+    case "http":
+      return "The server refused the circuit data. This is usually temporary, so try again.";
+    case "network":
+      return "The circuit data could not be reached. Check your connection, then try again.";
+    default:
+      return "The circuit data did not load.";
+  }
+}
+
+export function AppState({
+  kind,
+  title,
+  detail,
+  failure,
+  message,
+  onRetry,
+  retryLabel,
+  tracks,
+  circuitId,
+  onCircuitChange,
+}: AppStateProps) {
   const offline = kind === "error" && typeof navigator !== "undefined" && !navigator.onLine;
+  // retrying a circuit that does not exist just fails again at the same address, so the card
+  // leads with the picker instead and demotes the retry
+  const retryIsUseless = failure === "notfound";
+  const showPicker = kind === "error" && !!tracks && !!onCircuitChange && !!circuitId;
+  const known = !!tracks?.some((t) => t.id === circuitId);
 
   return (
     <div
@@ -28,7 +77,7 @@ export function AppState({ kind, title, detail, onRetry, retryLabel }: AppStateP
         justifyContent: "center",
         background: "var(--bg)",
       }}
-      role={kind === "error" ? "alert" : "status"}
+      role={kind === "loading" ? "status" : "alert"}
       aria-live="polite"
     >
       <Panel style={{ width: 400, maxWidth: "calc(100vw - 32px)", padding: "var(--s5)" }}>
@@ -37,7 +86,7 @@ export function AppState({ kind, title, detail, onRetry, retryLabel }: AppStateP
             display: "flex",
             alignItems: "center",
             gap: 8,
-            fontSize: 11,
+            fontSize: 12,
             letterSpacing: "0.16em",
             textTransform: "uppercase",
             color: "var(--text-dim)",
@@ -51,9 +100,9 @@ export function AppState({ kind, title, detail, onRetry, retryLabel }: AppStateP
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: "var(--text-muted)" }}>
           {kind === "loading"
             ? (detail ?? "loading")
-            : offline
-              ? "Your browser is offline, so the circuit data could not be fetched. Reconnect and try again."
-              : `The circuit data did not load. ${detail ?? ""}`}
+            : kind === "webgl"
+              ? "This browser could not start WebGL, which the 3D view needs. It is usually hardware acceleration being switched off, or a very old browser."
+              : (message ?? explain(failure, offline))}
         </p>
 
         {kind === "loading" && (
@@ -77,12 +126,70 @@ export function AppState({ kind, title, detail, onRetry, retryLabel }: AppStateP
           </div>
         )}
 
-        {onRetry && (
+        {showPicker && (
           <div style={{ marginTop: "var(--s4)" }}>
-            <Button variant="primary" size="md" onClick={onRetry}>
-              {retryLabel ?? "Retry"}
-            </Button>
+            {/* when the id in the URL is not a circuit, a plain <select> falls back to showing
+                the first option, which reads as "Spa is already selected" and hides the fact
+                that a choice is still required. The placeholder says the quiet part. */}
+            <Select
+              label="Circuit"
+              value={known ? circuitId : ""}
+              options={[
+                ...(known ? [] : [{ value: "", label: "Choose a circuit…" }]),
+                ...tracks.map((t) => ({ value: t.id, label: t.displayName })),
+              ]}
+              onChange={(id) => id && onCircuitChange(id)}
+            />
           </div>
+        )}
+
+        {(onRetry || detail) && (
+          <div
+            style={{
+              marginTop: "var(--s4)",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--s3)",
+              flexWrap: "wrap",
+            }}
+          >
+            {onRetry && (
+              <Button
+                variant={retryIsUseless ? "default" : "primary"}
+                size="md"
+                onClick={onRetry}
+              >
+                {retryLabel ?? "Retry"}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {detail && kind !== "loading" && (
+          <details style={{ marginTop: "var(--s3)" }}>
+            <summary
+              style={{
+                fontSize: 12,
+                color: "var(--text-dim)",
+                cursor: "pointer",
+                letterSpacing: "0.04em",
+              }}
+            >
+              What the browser reported
+            </summary>
+            <p
+              style={{
+                margin: "var(--s2) 0 0",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: "var(--text-dim)",
+                wordBreak: "break-word",
+              }}
+            >
+              {detail}
+            </p>
+          </details>
         )}
       </Panel>
     </div>

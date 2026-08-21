@@ -22,6 +22,7 @@ import { buildLapTimeTable, lowerIndex, sAtTime, timeAtS } from "../solver/lapTi
 import type { VelocityProfileResult } from "../solver/velocity";
 import { PHASE_BRAKE } from "../solver/velocity";
 import { MATERIAL, useThemeTokens } from "../ui/theme";
+import { blobShadowAlpha } from "./textures";
 
 export interface LapProgress {
   sM: number;
@@ -78,6 +79,7 @@ export function CarMarker({
   const groupRef = useRef<THREE.Group>(null);
   const bodyRef = useRef<THREE.Group>(null);
   const beaconRef = useRef<THREE.Mesh>(null);
+  const shadowRef = useRef<THREE.Mesh>(null);
   const discRef = useRef<THREE.MeshStandardMaterial>(null);
   const sRef = useRef(0);
   const lastScrubId = useRef(-1);
@@ -205,6 +207,8 @@ export function CarMarker({
       // tilted one reads as part of the car rather than as a position on the circuit
       beaconRef.current.rotation.x = -Math.PI / 2 - pitchRef.current;
     }
+    // same counter-pitch for the contact shadow, so it stays flat on the road
+    if (shadowRef.current) shadowRef.current.rotation.x = -Math.PI / 2 - pitchRef.current;
 
     // yaw from the ground-plane tangent. The -PI/2 puts the model's nose (local -z) on the
     // travel direction; pitch is applied above, about the car's own lateral axis.
@@ -260,6 +264,26 @@ export function CarMarker({
 
   return (
     <group ref={groupRef}>
+      {/* contact shadow.
+          The car had none: it carried a castShadow prop, but no light in the scene casts and the
+          renderer's shadow map is never enabled, so the prop was a no-op and the car floated a
+          few centimetres above its own reflection. A directional shadow map is the wrong fix at
+          this scale (2048 over a 4 km circuit is 2 m a texel, per DESIGN_NOTES 0.2b) and the blob
+          texture built for exactly this had been sitting in textures.ts unreferenced. One quad,
+          one draw, and it is what puts the car *on* the road rather than near it.
+          Counter-pitched like the beacon: a shadow that tilts with the body reads as part of the
+          car instead of as a mark on the ground. */}
+      <mesh ref={shadowRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={-1}>
+        <planeGeometry args={[3.6, 5.4]} />
+        <meshBasicMaterial
+          map={blobShadowAlpha()}
+          transparent
+          opacity={ghost ? 0.18 : 0.55}
+          depthWrite={false}
+          color="#000000"
+        />
+      </mesh>
+
       {/* ground beacon: a flat ring under the car, faded in by distance so it is invisible in
           the chase shots and unmissable when the whole circuit is in frame */}
       <mesh ref={beaconRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} visible={false}>

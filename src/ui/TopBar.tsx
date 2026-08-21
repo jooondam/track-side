@@ -26,6 +26,10 @@ export function formatLapTime(lapTimeS: number): string {
   return `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`;
 }
 
+/** the title block's height. The rail and the dock hang off it, and App sizes the grid row from
+ *  it, so it is one number rather than three that drift apart. */
+export const TOPBAR_H = 60;
+
 export function TopBar({
   tracks,
   circuitId,
@@ -90,30 +94,47 @@ export function TopBar({
 
       <div style={{ flex: 1 }} />
 
-      {/* polite, not assertive: a grip change should be announced when the reader is idle, not
+      {/* the title block's headline. It sets at display scale because it is the answer the whole
+          tool exists to produce, and it carries its own provenance because PRODUCT.md records
+          that absolute lap times here are modelled from an estimated GT3 g-g-v, not measured.
+          A hero number without that line would be the one claim on screen that is not true.
+
+          polite, not assertive: a grip change should be announced when the reader is idle, not
           interrupt whatever it was saying */}
       <div
-        style={{ display: narrow ? "none" : "flex", alignItems: "baseline", gap: "var(--s2)" }}
+        style={{ display: narrow ? "none" : "flex", alignItems: "baseline", gap: "var(--s3)" }}
         aria-live="polite"
       >
         <span
           style={{
-            fontSize: 10,
-            letterSpacing: "0.08em",
+            fontSize: 12,
+            letterSpacing: "0.09em",
             textTransform: "uppercase",
-            color: "var(--text-dim)",
+            color: "var(--text-muted)",
           }}
         >
           Lap
         </span>
-        <span className="tnum" style={{ fontSize: 19, fontWeight: 600, color: "var(--text)" }}>
+        <span
+          className="tnum"
+          style={{
+            fontSize: 30,
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            lineHeight: 1,
+            color: "var(--text)",
+          }}
+        >
           {formatLapTime(lapTimeS)}
+        </span>
+        <span style={{ fontSize: 12, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+          GT3 · modelled
         </span>
       </div>
 
       <div style={{ display: "flex", gap: "var(--s1)" }}>
         <IconButton
-          label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          label={theme === "dark" ? "Read the top sheet" : "Read under the work lamp"}
           onClick={toggleTheme}
         >
           {theme === "dark" ? "☀" : "☾"}

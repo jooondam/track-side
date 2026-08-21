@@ -109,10 +109,57 @@ function elevationFrom(rows: number[][]): Float64Array {
   return z;
 }
 
+/** why a circuit failed to load, in the terms the reader needs rather than the terms fetch uses */
+export type LoadFailure = "notfound" | "offline" | "network" | "malformed" | "http";
+
+export class CircuitLoadError extends Error {
+  readonly failure: LoadFailure;
+  readonly url: string;
+
+  constructor(failure: LoadFailure, url: string, message: string) {
+    super(message);
+    this.name = "CircuitLoadError";
+    this.failure = failure;
+    this.url = url;
+  }
+}
+
 async function fetchJson(url: string): Promise<any> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`failed to load ${url}: ${r.status}`);
-  return r.json();
+  let r: Response;
+  try {
+    r = await fetch(url);
+  } catch {
+    // fetch only rejects on a transport failure: offline, DNS, connection refused. An HTTP error
+    // is a resolved promise, so this branch really does mean "never reached the server".
+    const offline = typeof navigator !== "undefined" && !navigator.onLine;
+    throw new CircuitLoadError(
+      offline ? "offline" : "network",
+      url,
+      `could not reach ${url}`,
+    );
+  }
+
+  if (r.status === 404) throw new CircuitLoadError("notfound", url, `${url} returned 404`);
+  if (!r.ok) throw new CircuitLoadError("http", url, `${url} returned ${r.status}`);
+
+  // a dev server and most static hosts answer an unknown path with the SPA's own index.html at
+  // 200, so a circuit that does not exist arrives here as HTML rather than as a 404. Without
+  // this check it surfaced as the raw `Unexpected token '<', "<!doctype "...` the JSON parser
+  // throws, which names nothing the reader can act on and looks like a crash rather than a typo.
+  const contentType = r.headers.get("content-type") ?? "";
+  if (!contentType.includes("json")) {
+    throw new CircuitLoadError(
+      "notfound",
+      url,
+      `${url} answered with ${contentType || "no content-type"} rather than JSON`,
+    );
+  }
+
+  try {
+    return await r.json();
+  } catch {
+    throw new CircuitLoadError("malformed", url, `${url} is not valid JSON`);
+  }
 }
 
 export async function loadCircuitAssets(circuitId: string): Promise<CircuitAssets> {

@@ -12,41 +12,38 @@ import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
-import type { LineData } from "../assets";
+import type { TrackLines } from "../assets";
 import type { Corner } from "../assets";
 import { useThemeTokens } from "../ui/theme";
+import { sampleCenterline } from "./trackFrame";
+import type { ViewInsets } from "./ViewOffset";
 
 interface CornerLabelsProps {
-  line: LineData;
+  trackLines: TrackLines;
   corners: Corner[];
   exaggeration: number;
+  /** the rail and dock cover part of the canvas, and a label under a panel is a label nobody
+   *  reads: it has to be culled and its slot given to the next candidate. */
+  insets: ViewInsets;
 }
 
 const MIN_GAP_PX = { x: 108, y: 22 };
 
-export function CornerLabels({ line, corners, exaggeration }: CornerLabelsProps) {
+export function CornerLabels({ trackLines, corners, exaggeration, insets }: CornerLabelsProps) {
   const tokens = useThemeTokens();
   const elements = useRef<(HTMLDivElement | null)[]>([]);
   const scratch = useMemo(() => new THREE.Vector3(), []);
 
+  // corner.sM is a *centreline* arc length (see sampleCenterline). Resolving it on the racing
+  // line, as this did, drifts by up to 16 m at Spa, which is enough to hang a corner's name over
+  // the road after the corner.
   const placed = useMemo(
     () =>
       corners.map((corner) => {
-        let lo = 0;
-        let hi = line.nPoints - 1;
-        while (hi - lo > 1) {
-          const mid = (lo + hi) >> 1;
-          if (line.sM[mid] <= corner.sM) lo = mid;
-          else hi = mid;
-        }
-        return {
-          name: corner.name,
-          x: line.positionYup[3 * lo],
-          y: line.positionYup[3 * lo + 1],
-          z: line.positionYup[3 * lo + 2],
-        };
+        const frame = sampleCenterline(trackLines, corner.sM);
+        return { name: corner.name, x: frame.x, y: frame.y, z: frame.z };
       }),
-    [line, corners],
+    [trackLines, corners],
   );
 
   useFrame(({ camera, size }) => {
@@ -74,8 +71,14 @@ export function CornerLabels({ line, corners, exaggeration }: CornerLabelsProps)
     for (const p of projected) {
       const el = elements.current[p.i];
       if (!el) continue;
-      // a label centred near the edge is drawn half outside the canvas, so require a margin
-      const inset = p.x > 70 && p.x < size.width - 70;
+      // a label centred near the edge is drawn half outside the canvas, so require a margin.
+      // The left and bottom margins start at the panels, not at the canvas: the projection is
+      // already offset to compose into the same rectangle (see ViewOffset).
+      const inset =
+        p.x > insets.left + 70 &&
+        p.x < size.width - 70 &&
+        p.y > 12 &&
+        p.y < size.height - insets.bottom - 12;
       const collides =
         !p.onScreen ||
         !inset ||

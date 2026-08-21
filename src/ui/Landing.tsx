@@ -45,31 +45,63 @@ export function Landing({
         inset: 0,
         zIndex: 30,
         display: "flex",
-        alignItems: "center",
+        // flex-start, not center. Centring meant expanding "How it works" re-centred the whole
+        // block and lifted the primary CTA 71px out from under the pointer that had just clicked
+        // beside it: the only other button on the page relocated the main one.
+        alignItems: "flex-start",
         overflowY: "auto",
-        // leaves the circuit readable on the right instead of dimming the whole frame
-        background:
-          "linear-gradient(100deg, var(--bg) 0%, var(--bg) 34%, color-mix(in srgb, var(--bg) 82%, transparent) 56%, transparent 88%)",
       }}
+      className="ts-landing"
     >
-      <div style={{ padding: "var(--s6) clamp(24px, 7vw, 92px)", maxWidth: 640 }}>
+      {/* the wash is horizontal on a wide sheet, so the circuit stays readable to the right of the
+          copy. Below 760px it turns vertical and opaque: at 390px the old 100deg gradient went
+          fully transparent at 343px, which put the stat row, the buttons and the footer directly
+          over a saturated racing line. That is the first thing a shared portfolio link shows. */}
+      <style>{`
+        .ts-landing {
+          background: linear-gradient(100deg, var(--panel) 0%, var(--panel) 34%,
+            color-mix(in srgb, var(--panel) 82%, transparent) 56%, transparent 88%);
+        }
+        @media (max-width: 760px) {
+          .ts-landing {
+            background: linear-gradient(180deg, var(--panel) 0%, var(--panel) 68%,
+              color-mix(in srgb, var(--panel) 88%, transparent) 82%, transparent 100%);
+          }
+        }
+      `}</style>
+      <div
+        style={{
+          padding: "clamp(24px, 6vh, 64px) clamp(24px, 7vw, 92px) var(--s6)",
+          maxWidth: 660,
+          width: "100%",
+        }}
+      >
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 11,
-            letterSpacing: "0.16em",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            gap: "var(--s3)",
+            flexWrap: "wrap",
+            paddingBottom: "var(--s2)",
+            borderBottom: "2px solid var(--line-strong)",
+            fontSize: 12,
+            letterSpacing: "0.14em",
             textTransform: "uppercase",
-            color: "var(--text-dim)",
+            color: "var(--text-muted)",
           }}
         >
-          <span style={{ color: "var(--accent)" }}>◆</span> track-side
+          <span style={{ fontWeight: 700, color: "var(--text)" }}>
+            <span style={{ color: "var(--accent)" }}>◆</span> track-side
+          </span>
+          <span>
+            Run plan · {circuitName} · GT3
+          </span>
         </div>
 
         <h1
           style={{
-            margin: "var(--s3) 0 0",
+            margin: "var(--s5) 0 0",
             fontSize: "clamp(34px, 5.4vw, 54px)",
             lineHeight: 1.02,
             letterSpacing: "-0.02em",
@@ -105,9 +137,20 @@ export function Landing({
             borderTop: "1px solid var(--line)",
           }}
         >
-          <Stat label={`${circuitName} lap`} value={formatLapTime(lapTimeS)} />
-          <Stat label="named corners" value={String(cornerCount)} />
-          <Stat label="elevation range" value={`${elevationRangeM.toFixed(0)} m`} />
+          <Stat
+            label="Lap at grip 1.20"
+            value={formatLapTime(lapTimeS)}
+            size="lg"
+            note="modelled from an estimated GT3 g-g-v, not a measured lap"
+          />
+          <Stat label="Named corners" value={String(cornerCount)} size="lg" />
+          <Stat
+            label="Elevation range"
+            value={elevationRangeM.toFixed(0)}
+            unit="m"
+            size="lg"
+            note="registered from 2023 OpenF1 car location"
+          />
         </div>
 
         <div style={{ display: "flex", gap: "var(--s2)", alignItems: "center", flexWrap: "wrap" }}>
@@ -137,19 +180,16 @@ export function Landing({
                 listStyle: "none",
               }}
             >
-              {STEPS.map(([title, detail], i) => (
+              {STEPS.map(([title, detail]) => (
                 <li
                   key={title}
                   style={{
                     paddingTop: "var(--s2)",
-                    borderTop: "2px solid var(--accent-dim)",
+                    borderTop: "1px solid var(--line-strong)",
                   }}
                 >
-                  <div className="tnum" style={{ fontSize: 10, color: "var(--accent)" }}>
-                    0{i + 1}
-                  </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{title}</div>
-                  <div style={{ fontSize: 11, lineHeight: 1.5, color: "var(--text-dim)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{title}</div>
+                  <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--text-dim)" }}>
                     {detail}
                   </div>
                 </li>
@@ -168,7 +208,7 @@ export function Landing({
             marginTop: "var(--s5)",
             paddingTop: "var(--s3)",
             borderTop: "1px solid var(--line)",
-            fontSize: 10,
+            fontSize: 12,
             lineHeight: 1.6,
             color: "var(--text-dim)",
           }}

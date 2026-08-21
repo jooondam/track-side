@@ -9,11 +9,11 @@
     />
     <title>track-side: GT3 racing line viewer</title>
     <!-- the base colours are duplicated here on purpose: they paint the first frame before any
-         JavaScript runs, so there is no white flash before the token stylesheet is injected.
-         There is deliberately no prefers-color-scheme rule: theme.ts ignores the OS preference
-         and defaults to dark, so honouring it here only bought a light first frame followed by
-         a dark app for anyone on a light OS. The script below reads the same stored choice
-         theme.ts will read, so the first frame matches the app even for a light-theme user. -->
+         JavaScript runs, so there is no flash before the token stylesheet is injected. There is
+         deliberately no prefers-color-scheme rule: theme.ts ignores the OS preference and
+         defaults to the top sheet, because the product's physical scene is daylight and paper.
+         The script below reads the same stored choice theme.ts will read, so the first frame
+         matches the app for a reader who chose the lamp. -->
     <style>
       html,
       body,
@@ -21,30 +21,50 @@
         margin: 0;
         height: 100%;
         overflow: hidden;
-        background: #08090c;
-        color: #e8eaf0;
+        background: #d6d2c7;
+        color: #16191d;
         font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
           sans-serif;
       }
-      :root[data-theme="light"],
-      :root[data-theme="light"] body,
-      :root[data-theme="light"] #root {
-        background: #eef0f3;
-        color: #14161a;
+      :root[data-theme="dark"],
+      :root[data-theme="dark"] body,
+      :root[data-theme="dark"] #root {
+        background: #16130f;
+        color: #f2ece0;
       }
     </style>
     <script>
-      // runs before first paint; mirrors initialTheme() in src/ui/theme.ts
+      // runs before first paint; mirrors initialTheme() in src/ui/theme.ts, ?theme= included so
+      // a shared light-theme link does not flash dark before React mounts
       try {
-        if (localStorage.getItem("track-side:theme") === "light") {
-          document.documentElement.setAttribute("data-theme", "light");
-        }
+        var fromUrl = new URLSearchParams(location.search).get("theme");
+        var theme =
+          fromUrl === "light" || fromUrl === "dark"
+            ? fromUrl
+            : localStorage.getItem("track-side:theme");
+        if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
       } catch (_) {
-        /* private mode: fall through to dark */
+        /* private mode: fall through to the top sheet */
       }
     </script>
   </head>
   <body>
+    <!--
+      THESIS: the interface is the run plan an engineer fills in during a session, not a HUD
+      floating over a dark scene. It refuses the near-black telemetry chrome this category always
+      ships, and the cream-paper-and-serif rendition that subject would otherwise attract.
+      OWN-WORLD: NCR carbon-copy stock. White top sheet, canary duplicate, printed grid in
+      process blue, ballpoint ink, red and blue pencil annotation. Rules and column heads, never
+      cards. Colour is a role: the sheet you read tells you which solve you are reading.
+      STORY: an engineer recognises their own working document, drags grip, and watches the
+      sheet re-solve while the line itself holds still, because the line is grip-invariant.
+      FIRST VIEWPORT: one ruled sheet. Corner rows down the left, the solve as a column, the
+      circuit printed into the diagram block as ink on paper, deltas marked in the right margin,
+      lap time monumental in the title block.
+      FORM: the run plan, first on the ordered list, seed key 7bb61ca7.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review,
+      the verdict, DESIGN.md, and every shipping raster carrying its provenance.
+    -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

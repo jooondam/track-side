@@ -4,8 +4,8 @@
 // scale on the track group; car markers and labels compensate internally.
 
 import { Environment, Lightformer } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
-import { Suspense, useMemo } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { Suspense, useEffect, useMemo } from "react";
 import { Perf } from "r3f-perf";
 import * as THREE from "three";
 import type { CircuitAssets } from "../assets";
@@ -14,7 +14,9 @@ import { useTheme, useThemeTokens } from "../ui/theme";
 import { BrakingMarkers } from "./BrakingMarkers";
 import { CameraRig } from "./CameraRig";
 import { CarMarker, type LapProgress } from "./CarMarker";
+import { CarTrail } from "./CarTrail";
 import { CornerLabels } from "./CornerLabels";
+import { ViewOffset, type ViewInsets } from "./ViewOffset";
 import { Kerbs } from "./Kerbs";
 import { Landmarks } from "./Landmarks";
 import { RacingLine, type ColorMode } from "./RacingLine";
@@ -36,10 +38,14 @@ interface SceneProps {
   speedMultiplier: number;
   exaggeration: number;
   showPerf: boolean;
+  showFurniture: boolean;
   progressRef: React.MutableRefObject<LapProgress>;
   carPoseRef: React.MutableRefObject<{ position: THREE.Vector3; direction: THREE.Vector3 }>;
   onHoverIndex: (index: number | null) => void;
   onUserTakeover: () => void;
+  /** canvas pixels the HUD panels cover, so the camera composes for the rectangle that is
+   *  actually visible rather than for the whole canvas */
+  insets: ViewInsets;
 }
 
 export function Scene({
@@ -54,10 +60,12 @@ export function Scene({
   speedMultiplier,
   exaggeration,
   showPerf,
+  showFurniture,
   progressRef,
   carPoseRef,
   onHoverIndex,
   onUserTakeover,
+  insets,
 }: SceneProps) {
   const tokens = useThemeTokens();
   const { theme } = useTheme();
@@ -96,16 +104,23 @@ export function Scene({
         near: 1,
       }}
       dpr={[1, 2]}
+      // the sheet the diagram block is printed on, in CSS as well as in the scene. The scene
+      // clears to this same colour every frame, so in a browser this is never seen; it is here
+      // for the frames where the clear has not happened yet or cannot happen, a context loss
+      // being the one that matters, where the alternative showing through is #root's binder.
+      // It was originally added to close a 310px void above the terrain at 1440x900 with both
+      // panels pinned. That void was a capture artifact of Playwright's old headless shell
+      // (see scripts/shots.mjs) rather than anything the page did, and it is not what this
+      // fixes.
+      style={{ background: "var(--scene-bg)" }}
       gl={{ antialias: true }}
       onCreated={({ gl }) => {
-        // without these the standard materials render flat and washed out
-        gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.05;
         gl.outputColorSpace = THREE.SRGBColorSpace;
       }}
     >
       {/* a floor behind the dome. If SkyDome ever fails to compile or is suspended, this is
           what shows, and it is the horizon rather than the browser's default white. */}
+      <Ink printed={theme === "light"} />
       <color attach="background" args={[tokens.sceneBg]} />
       <SkyDome sun={sun} extent={extent} reducedMotion={reducedMotion} />
 
@@ -153,6 +168,7 @@ export function Scene({
           all. Same terrain.json, one draw call, visible at every altitude. */}
       <TerrainMesh
         terrain={assets.terrain}
+        extent={extent}
         exaggeration={exaggeration}
         reducedMotion={reducedMotion}
       />
@@ -171,12 +187,21 @@ export function Scene({
           colorMode={colorMode}
           onHoverIndex={onHoverIndex}
         />
-        <BrakingMarkers line={assets.line} result={result} />
+        <BrakingMarkers
+          line={assets.line}
+          trackLines={assets.trackLines}
+          result={result}
+          progressRef={progressRef}
+        />
+        <CarTrail line={assets.line} result={result} progressRef={progressRef} />
       </group>
 
-      {/* trackside content, in its own group: it carries the same exaggeration scale but must
-          not inherit the track group's ordering, since the fence and boards are alpha-tested */}
-      <Landmarks assets={assets} exaggeration={exaggeration} />
+      {/* trackside content, in its own group: it must not inherit the track group's ordering,
+          since the fence and boards are alpha-tested. It also must not inherit the track group's
+          Y scale, which is why it takes exaggeration as a value and applies it per placement.
+          Unmounted rather than hidden when off: it is scenery, so when it is not wanted it
+          should not be costing draw calls either. */}
+      {showFurniture && <Landmarks assets={assets} exaggeration={exaggeration} />}
 
       <CarMarker
         line={assets.line}
@@ -201,8 +226,15 @@ export function Scene({
       {/* drei <Html> labels are real DOM, so they draw over the hero overlay: suppressed
           while the landing is up rather than fighting it with z-index */}
       {!orbiting && (
-        <CornerLabels line={assets.line} corners={assets.landmarks.corners} exaggeration={exaggeration} />
+        <CornerLabels
+          trackLines={assets.trackLines}
+          corners={assets.landmarks.corners}
+          exaggeration={exaggeration}
+          insets={insets}
+        />
       )}
+
+      <ViewOffset insets={insets} reducedMotion={reducedMotion} />
 
       <CameraRig
         viewpoint={viewpoint}
@@ -217,3 +249,27 @@ export function Scene({
     </Canvas>
   );
 }
+
+/**
+ * tone mapping, decided by which sheet is being read.
+ *
+ * The top sheet is *printed*, and print has no highlight roll-off: ink either covers the paper or
+ * it does not. ACES was pulling the paper white (#fbfaf7, at 0.98) down to roughly #d8d5d2, which
+ * is why the sky above the diagram block rendered as a dead grey slab rather than as the page it
+ * sits on. NoToneMapping keeps paper at paper.
+ *
+ * The work-lamp sheet keeps ACES, because a lamp *is* an HDR light source and the roll-off is
+ * doing real work there.
+ *
+ * This has to be an effect rather than Canvas's onCreated, which runs once and cannot follow the
+ * theme toggle.
+ */
+function Ink({ printed }: { printed: boolean }) {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    gl.toneMapping = printed ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+    gl.toneMappingExposure = printed ? 1 : 1.05;
+  }, [gl, printed]);
+  return null;
+}
+
