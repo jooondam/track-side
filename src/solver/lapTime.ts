@@ -55,3 +55,20 @@ export function sAtTime(table: LapTimeTable, sM: Float64Array, t: number): numbe
     (wrapped - table.cumTimeS[lo]) / Math.max(table.cumTimeS[hi] - table.cumTimeS[lo], 1e-9);
   return sM[lo] + frac * (sM[hi] - sM[lo]);
 }
+
+/**
+ * The car's delta to its ghost at the same point on the road, in seconds.
+ *
+ * One convention for the whole interface: **car minus ghost, so negative means the car is
+ * quicker**. That is the sign a delta bar shows a driver and the sign a time variance channel
+ * shows an engineer, and agreeing with them matters more than any local convenience, because the
+ * number in the rail and the trace in the dock are read together.
+ *
+ * This is a function rather than a subtraction written out at each site because it was written
+ * both ways round in four places, two of them 300px apart on the same screen: the rail said the
+ * car was slower while the dock said it was quicker, about one comparison. The arithmetic was
+ * right in every one of them, which is exactly why it survived so long.
+ */
+export function deltaToGhost(carTimeS: number, ghostTimeS: number): number {
+  return carTimeS - ghostTimeS;
+}

@@ -115,6 +115,8 @@ export function Field({
   note,
   tone,
 }: {
+  /** Set in uppercase by CSS, so keep Greek out of it: \u03bc uppercases to \u039c, which reads as a
+   *  Latin M. "vs ghost \u03bc1.20" printed as "VS GHOST M1.20". Grip belongs in `note`. */
   label: string;
   value: string;
   unit?: string;
@@ -393,6 +395,8 @@ export function Stat({
   note,
   size = "md",
 }: {
+  /** Set in uppercase by CSS, so keep Greek out of it: \u03bc uppercases to \u039c, which reads as a
+   *  Latin M. "vs ghost \u03bc1.20" printed as "VS GHOST M1.20". Grip belongs in `note`. */
   label: string;
   value: string;
   unit?: string;
@@ -464,6 +468,20 @@ export function Stat({
       )}
     </div>
   );
+}
+
+/**
+ * A signed delta in seconds, under the interface's one convention: negative is quicker (see
+ * deltaToGhost). The sign is always written, since colour alone is not an accessible signal, and
+ * the minus is U+2212 rather than a hyphen so it sits at digit width in tabular figures.
+ *
+ * Exact zero prints unsigned. A coincident ghost is not "slower by nothing", and printing +0.00
+ * invites the reader to look for a difference that is not there.
+ */
+export function formatDeltaS(seconds: number, digits = 2): string {
+  const rounded = Number(seconds.toFixed(digits));
+  if (rounded === 0) return `${(0).toFixed(digits)} s`;
+  return `${rounded < 0 ? "\u2212" : "+"}${Math.abs(rounded).toFixed(digits)} s`;
 }
 
 export function Kbd({ children }: { children: ReactNode }) {

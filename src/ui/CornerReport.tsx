@@ -20,8 +20,9 @@
 
 import { useMemo } from "react";
 import type { Corner, LineData } from "../assets";
+import { formatDeltaS } from "./primitives";
 import type { LapTimeTable } from "../solver/lapTime";
-import { timeAtS } from "../solver/lapTime";
+import { deltaToGhost, timeAtS } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
 
 interface CornerReportProps {
@@ -75,12 +76,12 @@ function buildRows(
     }
 
     const carTime = ((timeAtS(table, line.sM, exitS) - timeAtS(table, line.sM, entryS)) + table.lapTimeS) % table.lapTimeS;
-    const deltaS = ghostTable
+    const ghostTime = ghostTable
       ? ((timeAtS(ghostTable, line.sM, exitS) - timeAtS(ghostTable, line.sM, entryS)) +
           ghostTable.lapTimeS) %
-          ghostTable.lapTimeS -
-        carTime
+        ghostTable.lapTimeS
       : null;
+    const deltaS = ghostTime === null ? null : deltaToGhost(carTime, ghostTime);
 
     return {
       corner,
@@ -131,7 +132,7 @@ export function CornerReport({
     <div style={{ overflow: "auto", height: "100%", minWidth: 0 }}>
       <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 380 }}>
         <caption className="sr-only">
-          Per corner minimum, entry and exit speed, time in the corner, and delta to the ghost.
+          Per corner minimum, entry and exit speed, time in the corner, and delta to the ghost, where negative is quicker.
         </caption>
         <thead>
           <tr>
@@ -139,19 +140,19 @@ export function CornerReport({
               Corner
             </th>
             <th scope="col" style={th}>
-              v min
+              v min <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>km/h</span>
             </th>
             <th scope="col" style={th}>
-              entry
+              entry <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>km/h</span>
             </th>
             <th scope="col" style={th}>
-              exit
+              exit <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>km/h</span>
             </th>
             <th scope="col" style={th}>
-              time
+              time <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>s</span>
             </th>
             <th scope="col" style={th}>
-              delta
+              delta <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>s</span>
             </th>
           </tr>
         </thead>
@@ -181,14 +182,12 @@ export function CornerReport({
                   color:
                     row.deltaS === null
                       ? "var(--text-dim)"
-                      : row.deltaS >= 0
+                      : row.deltaS <= 0
                         ? "var(--pos)"
                         : "var(--neg)",
                 }}
               >
-                {row.deltaS === null
-                  ? "-"
-                  : `${row.deltaS >= 0 ? "+" : ""}${row.deltaS.toFixed(2)}`}
+                {row.deltaS === null ? "\u2013" : formatDeltaS(row.deltaS)}
               </td>
             </tr>
           ))}

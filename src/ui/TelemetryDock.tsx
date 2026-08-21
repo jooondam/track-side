@@ -15,7 +15,7 @@ import { CornerReport } from "./CornerReport";
 import { DeltaTrace } from "./DeltaTrace";
 import { ElevationStrip } from "./ElevationStrip";
 import { GgDiagram } from "./GgDiagram";
-import { Button, IconButton } from "./primitives";
+import { Button, IconButton, formatDeltaS } from "./primitives";
 import { SpeedTrace } from "./SpeedTrace";
 import { Timeline } from "./Timeline";
 import { useElementWidth } from "./canvasUtils";
@@ -23,6 +23,7 @@ import type { Expandable } from "./useExpandable";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 import type { LapTimeTable } from "../solver/lapTime";
+import { deltaToGhost } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
 import type { Corner } from "../assets";
 
@@ -300,10 +301,10 @@ function LiveDelta({
         Math.max(Math.round((p.sM / line.loopLengthM) * (line.nPoints - 1)), 0),
         line.nPoints - 1,
       );
-      const d = ghostTable.cumTimeS[i] - table.cumTimeS[i];
+      const d = deltaToGhost(table.cumTimeS[i], ghostTable.cumTimeS[i]);
       if (ref.current) {
-        ref.current.textContent = `${d >= 0 ? "+" : ""}${d.toFixed(2)} s`;
-        ref.current.style.color = d >= 0 ? "var(--pos)" : "var(--neg)";
+        ref.current.textContent = formatDeltaS(d);
+        ref.current.style.color = d <= 0 ? "var(--pos)" : "var(--neg)";
       }
       raf = requestAnimationFrame(tick);
     };

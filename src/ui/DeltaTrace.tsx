@@ -7,11 +7,18 @@
 // over the lap are completely different problems.
 //
 // How to read it, since the sign convention is the one thing people get backwards: the curve is
-// ghost time minus car time at the same arc length, so
+// car time minus ghost time at the same arc length (deltaToGhost), so
 //
-//   rising    the car is gaining on the ghost through here
-//   falling   the car is losing
-//   the end   the lap time difference, which is the number in the panel
+//   below zero   the car is up on the ghost
+//   rising       the car is losing time through here
+//   falling      the car is gaining
+//   the end      the lap time difference, which is the number in the rail
+//
+// Positive is plotted upward, which puts losing time at the top. That is the same way round as a
+// time variance channel, and it is the same sign the rail and the dock strip print, which is the
+// point: this trace used to be drawn ghost minus car, so the dock said the car was up while the
+// rail said it was down, about one comparison. The axis is labelled in the gutter rather than
+// left to be inferred.
 //
 // Slope is what matters, not height. Height is only the accumulated history of the slope, so a
 // trace that sits high and flat means "gained it earlier, level here", not "fast here".
@@ -24,6 +31,8 @@ import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
 import { useThemeTokens } from "./theme";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
+import { deltaToGhost } from "../solver/lapTime";
+import { formatDeltaS } from "./primitives";
 import type { LapTimeTable } from "../solver/lapTime";
 
 interface DeltaTraceProps {
@@ -56,7 +65,7 @@ export function DeltaTrace({
     const d = new Float64Array(line.nPoints);
     let peak = 0;
     for (let i = 0; i < line.nPoints; i++) {
-      d[i] = ghostTable.cumTimeS[i] - table.cumTimeS[i];
+      d[i] = deltaToGhost(table.cumTimeS[i], ghostTable.cumTimeS[i]);
       peak = Math.max(peak, Math.abs(d[i]));
     }
     // symmetric about zero so the zero line stays in the middle and the sign is readable at a
@@ -79,14 +88,21 @@ export function DeltaTrace({
       ctx.clearRect(0, 0, width, height);
 
       ctx.fillStyle = tokens.textDim;
-      ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+      ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
       ctx.textAlign = "left";
       ctx.fillText("delta to ghost", r.left, 10);
+      // the sign convention, written out where the trace is read rather than in a legend
+      // elsewhere. Dropped rather than overlapped when the dock is too narrow to hold it.
+      const keyX = r.left + ctx.measureText("delta to ghost").width + 10;
+      const key = "\u2212 quicker  +  slower";
+      if (keyX + ctx.measureText(key).width < r.left + r.width - 70) {
+        ctx.fillText(key, keyX, 10);
+      }
 
       if (!delta) {
         ctx.fillStyle = tokens.textDim;
         ctx.textAlign = "center";
-        ctx.fillText("turn the ghost on to compare", r.left + r.width / 2, r.top + r.height / 2 + 3);
+        ctx.fillText("turn the ghost on to compare", r.left + r.width / 2, r.top + r.height / 2 + 4);
         raf = requestAnimationFrame(draw);
         return;
       }
@@ -105,8 +121,8 @@ export function DeltaTrace({
       // filled to zero and split at the crossing, so gaining and losing are different colours
       // rather than the reader having to track which side of the line they are on
       for (const [sign, colour] of [
-        [1, tokens.pos],
-        [-1, tokens.neg],
+        [1, tokens.neg],
+        [-1, tokens.pos],
       ] as const) {
         ctx.beginPath();
         ctx.moveTo(xAt(0), yAt(0));
@@ -133,6 +149,32 @@ export function DeltaTrace({
       ctx.lineWidth = 1.25;
       ctx.stroke();
 
+      // the gutter was 46px of nothing, so the trace had no scale at all: a reader could see
+      // the shape but not what any height was worth. Three ticks are enough here, since the
+      // span is symmetric by construction.
+      ctx.font = "12px ui-monospace, monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      // the gutter is 46px, and a full two decimals at 12px mono does not fit once the span runs
+      // into double figures, which it does the moment the two solves are a grip step apart. The
+      // exact number is the readout's job; these only have to give the trace a scale.
+      const tickDigits = span >= 10 ? 0 : span >= 1 ? 1 : 2;
+      for (const d of [span, 0, -span]) {
+        const y = yAt(d);
+        ctx.strokeStyle = tokens.line;
+        ctx.beginPath();
+        ctx.moveTo(r.left - 4, y + 0.5);
+        ctx.lineTo(r.left, y + 0.5);
+        ctx.stroke();
+        ctx.fillStyle = tokens.textDim;
+        ctx.fillText(
+          d === 0 ? "0" : `${d < 0 ? "\u2212" : "+"}${Math.abs(d).toFixed(tickDigits)}`,
+          r.left - 7,
+          y,
+        );
+      }
+      ctx.textBaseline = "alphabetic";
+
       const frac = Math.min(Math.max(progressRef.current.sM / line.loopLengthM, 0), 1);
       const x = r.left + frac * r.width;
       ctx.strokeStyle = tokens.accent;
@@ -145,10 +187,10 @@ export function DeltaTrace({
       // the delta under the cursor, which is the number the trace exists to produce
       const i = Math.min(Math.round(frac * (line.nPoints - 1)), line.nPoints - 1);
       const here = delta[i];
-      ctx.fillStyle = here >= 0 ? tokens.pos : tokens.neg;
-      ctx.font = "10px ui-monospace, monospace";
+      ctx.fillStyle = here <= 0 ? tokens.pos : tokens.neg;
+      ctx.font = "12px ui-monospace, monospace";
       ctx.textAlign = "right";
-      ctx.fillText(`${here >= 0 ? "+" : ""}${here.toFixed(2)} s`, r.left + r.width, 10);
+      ctx.fillText(formatDeltaS(here), r.left + r.width, 10);
 
       raf = requestAnimationFrame(draw);
     };

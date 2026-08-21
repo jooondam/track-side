@@ -2,11 +2,12 @@
 // expanded it is five labelled groups. Replaces the old single 250px box that carried eight
 // ungrouped rows of buttons and never got out of the way of the circuit.
 
-import { Button, ButtonGroup, Check, IconButton, Panel, Section, Select, Slider, Stat } from "./primitives";
+import { Button, ButtonGroup, Check, IconButton, Panel, Section, Select, Slider, Stat, formatDeltaS } from "./primitives";
 import { TOPBAR_H, formatLapTime } from "./TopBar";
 import type { Expandable } from "./useExpandable";
 import type { ColorMode } from "../render/RacingLine";
 import type { Viewpoint } from "../render/viewpoints";
+import { deltaToGhost } from "../solver/lapTime";
 
 export interface HoverInfo {
   sM: number;
@@ -67,8 +68,9 @@ export function SidePanel(props: SidePanelProps) {
   );
   const activeCorner = props.viewpointId.startsWith("corner:") ? props.viewpointId : "";
 
+  // one convention, one helper: negative is quicker. See deltaToGhost.
   const ghostDelta =
-    props.ghostLapTimeS === null ? null : props.lapTimeS - props.ghostLapTimeS;
+    props.ghostLapTimeS === null ? null : deltaToGhost(props.lapTimeS, props.ghostLapTimeS);
 
   const narrowStyle: React.CSSProperties = {
     position: "fixed",
@@ -147,14 +149,24 @@ export function SidePanel(props: SidePanelProps) {
           </Section>
 
           <Section label="Result">
-            <Stat label="lap time" value={formatLapTime(props.lapTimeS)} size="lg" />
+            {/* provenance, not decoration: PRODUCT.md is explicit that absolute lap times are
+                estimated rather than measured, so the number says what it is where it is read.
+                The grip is named because the same circuit solves to a different number at a
+                different mu, and that is the whole point of the slider above it. */}
+            <Stat
+              label="lap time"
+              value={formatLapTime(props.lapTimeS)}
+              size="lg"
+              note={`solved for a GT3 model at \u03bc${props.mu.toFixed(2)}, not measured`}
+            />
             {ghostDelta !== null && (
               <Stat
-                label="vs ghost μ1.20"
+                label="vs ghost"
                 value={formatLapTime(props.ghostLapTimeS as number)}
-                delta={`${ghostDelta <= 0 ? "−" : "+"}${Math.abs(ghostDelta).toFixed(2)} s`}
+                delta={formatDeltaS(ghostDelta)}
                 deltaTone={ghostDelta <= 0 ? "pos" : "neg"}
                 size="sm"
+                note={"reference grip \u03bc1.20, negative is quicker"}
               />
             )}
             {props.hoverInfo && (

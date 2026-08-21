@@ -14,8 +14,8 @@ annotation. Five of the six tasks that built it are done: the token layer, the c
 sheet, the landing, the printed 3D scene, and the verification pass.
 
 The finish reviewer then returned **disposition: rebuild**, scoped to the landing. Everything
-below is the open list. Nothing here is committed; the whole rebuild is still working-tree state
-on `main`.
+below is the open list. The rebuild is committed as of 2026-08-21, in three commits on `main`
+starting at 454ec08, so `git log` now carries it.
 
 What the reviewer said to keep, unchanged: the phase palette and its reasoning, the zero-radius
 square cut, and the rail's column-head-and-rule structure, as "the only places the run plan is
@@ -36,10 +36,12 @@ genuinely the world rather than a label on it".
 5. **Theme the native selects, restate the error card as a ruled block.** Presentation only: the
    error path's behaviour is fixed and verified, do not regress it.
 6. **Derive the dark rendition as stock under a lamp,** not leather grain.
-7. **Fix the ghost delta sign inversion.** `SidePanel.tsx:71` computes `car - ghost`;
-   `CornerReport.tsx:81` computes `ghost - car`; LiveDelta and DeltaTrace follow the second. One
-   exported `deltaToGhost(car, ghost) => ghost - car` for all four, negative meaning quicker,
-   labelled in DeltaTrace's empty 46px gutter. Add provenance to the rail's lap time while there.
+7. ~~Fix the ghost delta sign inversion.~~ **Done.** One exported `deltaToGhost(car, ghost)`
+   in `solver/lapTime.ts`, used by all four sites, pinned by a test. Note that the critique
+   prescribed `ghost - car` *and* "negative = quicker", which cannot both hold; the convention
+   kept is **car minus ghost, negative is quicker**, because that is what a delta bar shows a
+   driver and what a time variance channel shows an engineer. DeltaTrace's 46px gutter now
+   carries ticks, a zero and the key; the rail's lap time carries its provenance.
 8. **Write DESIGN.md from the rebuilt world.** Blocked on 1 to 7 and on a fresh finish review
    returning something other than rebuild. It is recorded from the built artifact, not from
    intentions, so it cannot be written under a rebuild disposition.
@@ -81,7 +83,7 @@ reviewer's other findings do not depend on the 3D region and stand.
 ## Verifying
 
     npm run build      # tsc --noEmit && vite build
-    npm test           # 119 tests
+    npm test           # 122 tests
     node scripts/verify-p0.mjs
     npm run shots
 
