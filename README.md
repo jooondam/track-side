@@ -63,6 +63,8 @@ Licensing B.V.; this project is not endorsed by or associated with them.
 Reference raceline comparison: TUMFTM/global_racetrajectory_optimization (LGPL-3.0),
 Heilmeier et al., "Minimum curvature trajectory planning and control for an autonomous race
 car", Vehicle System Dynamics 58(10), 2020.
+Display face: Archivo, © 2020 The Archivo Project Authors (Omnibus-Type), SIL Open Font
+License 1.1. Self-hosted, weight axis only; licence text in third_party/Archivo-OFL-1.1.txt.
 ```
 
 See `third_party/README.md` for the vendoring boundary this repo enforces.

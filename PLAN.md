@@ -27,8 +27,12 @@ genuinely the world rather than a label on it".
    which is the hero-metric template the craft floor refuses. Corner rows, printed grid, deltas in
    a real right margin, lap time monumental as page structure. Name the vehicle. Qualify the lap
    time, since absolute lap times are estimated and not measured.
-2. **Self-host Archivo or drop it.** `src/ui/theme.ts:241` names it as the display face. No
-   `@font-face`, no font file, no `<link>`. Every headline so far has been the platform sans.
+2. ~~Self-host Archivo or drop it.~~ **Done.** Self-hosted via `@fontsource-variable/archivo`,
+   weight axis only, imported in `main.tsx`. One 35 kB latin woff2 is fetched; the other two
+   subsets are gated by unicode-range and never requested for a latin page. Note `--font-display`
+   is set on html, body and #root, so this is the whole interface, not a headline treatment, and
+   every screenshot taken before this shows the wrong face. Greek mu falls outside the latin
+   subset, so U+03BC alone still renders in the fallback.
 3. **Bind `panelRaised` or strike it.** Declared at `theme.ts:19`, valued at `:104` and `:159`,
    mapped to `--panel-raised` at `:248`, consumed nowhere. It carries the promise that the sheet
    you are reading tells you which solve you are reading.
