@@ -173,15 +173,17 @@ export function CameraRig({
     if (orbiting) {
       if (!reducedMotion) orbitAngle.current += delta * 0.045;
       const a = orbitAngle.current;
-      // far enough back that the whole circuit fits in roughly 40% of the frame width, and high
-      // enough that it reads as a shape rather than flattening into the horizon
-      const r = extent * 0.8;
-      camera.position.set(center[0] + Math.cos(a) * r, extent * 0.5, center[2] + Math.sin(a) * r);
-      // push the look-at left of the circuit so the circuit renders right of centre, clear of the
-      // hero copy. Screen-right for this orbit is (sin a, 0, -cos a), so the target moves against
-      // it and follows the camera around.
-      const off = extent * 0.28;
-      controls.target.set(center[0] - Math.sin(a) * off, 0, center[2] + Math.cos(a) * off);
+      // framed for the sheet's diagram plate, not for the window. The plate is a band a few
+      // hundred pixels tall, and ViewOffset has already told the camera to compose inside it, so
+      // the only job left here is standing at a distance that fills it: at the old extent * 0.8
+      // the circuit was a small drawing in a large field of empty terrain.
+      //
+      // The look-at used to be pushed sideways by extent * 0.28, to keep the circuit clear of
+      // hero copy that ran across it. Nothing runs across it now. The figure is centred in its
+      // own frame, which is what a figure does.
+      const r = extent * 0.55;
+      camera.position.set(center[0] + Math.cos(a) * r, extent * 0.38, center[2] + Math.sin(a) * r);
+      controls.target.set(center[0], 0, center[2]);
       controls.update();
       return;
     }

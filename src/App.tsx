@@ -21,6 +21,8 @@ import type { Corner } from "./assets";
 import { ColorLegend } from "./ui/ColorLegend";
 import { HelpOverlay } from "./ui/HelpOverlay";
 import { Landing } from "./ui/Landing";
+import type { PlateRect } from "./ui/Landing";
+import { buildCornerRows } from "./ui/cornerRows";
 import { AppState } from "./ui/AppState";
 import { SceneBoundary } from "./ui/SceneBoundary";
 import { RAIL_COLLAPSED_W, RAIL_EXPANDED_W, SidePanel, ViewpointPill } from "./ui/SidePanel";
@@ -31,6 +33,9 @@ import { readUrlState, writeUrlState } from "./ui/urlState";
 import { useExpandable } from "./ui/useExpandable";
 
 const GHOST_MU = 1.2;
+/** the grip the landing's margin column compares against. Low enough that the difference is
+ *  worth printing, inside the slider's own range so it is a solve the reader can reproduce. */
+const COVER_MU = 0.95;
 
 /** whether this browser can give us a 3D context at all. Cheap, and done once: without it a
  *  machine with hardware acceleration switched off just renders a blank rectangle. */
@@ -83,6 +88,7 @@ function Viewer() {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [solveMs, setSolveMs] = useState(0);
   const [showLanding, setShowLanding] = useState(!initial.enter);
+  const [plateRect, setPlateRect] = useState<PlateRect | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
 
@@ -196,6 +202,20 @@ function Viewer() {
         : null,
     [assets, ghostResult],
   );
+
+  // the cover sheet's second solve, and only while the cover is up: it is what lets the margin
+  // column say what grip is worth per corner instead of asserting it in a sentence. Its own
+  // solver instance for the same reason the ghost has one.
+  const coverResult = useMemo(() => {
+    if (!assets || !showLanding) return null;
+    const s = new VelocitySolver(assets.line.sM, assets.line.kappa1pm, assets.line.zM);
+    return s.solve({ ...assets.vehicleBase, mu: COVER_MU });
+  }, [assets, showLanding]);
+  const coverRows = useMemo(() => {
+    if (!assets || !result || !table || !coverResult) return [];
+    const coverTable = buildLapTimeTable(assets.line.sM, coverResult.vMps, coverResult.dlM);
+    return buildCornerRows(assets.line, result, table, coverTable, assets.landmarks.corners);
+  }, [assets, result, table, coverResult]);
 
   const viewpoints = useMemo(
     () =>
@@ -328,7 +348,18 @@ function Viewer() {
   // a persistent column, so it occludes nothing there; the dock's strip is always up.
   const railW = narrow || showLanding ? 0 : sidePanel.expanded ? RAIL_EXPANDED_W : RAIL_COLLAPSED_W;
   const dockH = showLanding ? 0 : dock.expanded ? DOCK_STRIP_H + DOCK_BODY_H : DOCK_STRIP_H;
-  const insets = { left: railW, bottom: dockH };
+  // while the cover is up the camera composes for the diagram plate, which is a bounded figure
+  // on the sheet rather than a backdrop behind it. The canvas is the whole window there, since
+  // the top bar is not rendered until the cover is dismissed.
+  const insets =
+    showLanding && plateRect
+      ? {
+          left: Math.max(plateRect.left, 0),
+          top: Math.max(plateRect.top, 0),
+          right: Math.max(window.innerWidth - plateRect.right, 0),
+          bottom: Math.max(window.innerHeight - plateRect.bottom, 0),
+        }
+      : { left: railW, bottom: dockH, top: 0, right: 0 };
 
   const elevationRangeM = elevationRange(assets);
 
@@ -452,11 +483,21 @@ function Viewer() {
         )}
         {showLanding && (
           <Landing
+            circuitId={circuitId}
             circuitName={trackDef.displayName}
             lapTimeS={result.lapTimeS}
-            cornerCount={assets.landmarks.corners.length}
             elevationRangeM={elevationRangeM}
+            solveMs={solveMs}
+            vehicle={assets.vehicleBase}
+            mu={mu}
+            compareMu={COVER_MU}
+            rows={coverRows}
             onEnter={() => setShowLanding(false)}
+            onEnterAtCorner={(corner) => {
+              setViewpointId(`corner:${corner.name}`);
+              setShowLanding(false);
+            }}
+            onPlateRect={setPlateRect}
           />
         )}
       </main>

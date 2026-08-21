@@ -21,6 +21,11 @@ export interface ViewInsets {
   left: number;
   /** pixels of canvas covered at the bottom by the telemetry dock */
   bottom: number;
+  /** covered at the top. Zero in the viewer; the landing sheet uses it to hold the camera inside
+   *  the diagram plate, which is a bounded figure on the page rather than a backdrop behind it. */
+  top?: number;
+  /** covered on the right, same reason */
+  right?: number;
 }
 
 /** per-second approach rate, so the reframe rides along with the panel's own width/height
@@ -40,9 +45,14 @@ export function ViewOffset({
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
 
-  const current = useRef({ left: insets.left, bottom: insets.bottom });
+  const current = useRef({
+    left: insets.left,
+    bottom: insets.bottom,
+    top: insets.top ?? 0,
+    right: insets.right ?? 0,
+  });
   // what is actually on the camera right now, so a frame that changes nothing costs two compares
-  const applied = useRef({ left: -1, bottom: -1, w: -1, h: -1 });
+  const applied = useRef({ left: -1, bottom: -1, top: -1, right: -1, w: -1, h: -1 });
 
   useEffect(() => {
     const cam = camera;
@@ -54,16 +64,22 @@ export function ViewOffset({
 
   useFrame((_, dt) => {
     const c = current.current;
+    const target = {
+      left: insets.left,
+      bottom: insets.bottom,
+      top: insets.top ?? 0,
+      right: insets.right ?? 0,
+    };
+    const sides = ["left", "bottom", "top", "right"] as const;
     if (reducedMotion) {
-      c.left = insets.left;
-      c.bottom = insets.bottom;
+      for (const side of sides) c[side] = target[side];
     } else {
       const k = 1 - Math.exp(-INSET_RATE * dt);
-      c.left += (insets.left - c.left) * k;
-      c.bottom += (insets.bottom - c.bottom) * k;
-      // settle exactly, so a panel that finished opening stops rebuilding the matrix
-      if (Math.abs(insets.left - c.left) < EPS_PX) c.left = insets.left;
-      if (Math.abs(insets.bottom - c.bottom) < EPS_PX) c.bottom = insets.bottom;
+      for (const side of sides) {
+        c[side] += (target[side] - c[side]) * k;
+        // settle exactly, so a panel that finished opening stops rebuilding the matrix
+        if (Math.abs(target[side] - c[side]) < EPS_PX) c[side] = target[side];
+      }
     }
 
     const W = size.width;
@@ -76,21 +92,23 @@ export function ViewOffset({
     // blank paper with their own road missing.
     a.left = c.left;
     a.bottom = c.bottom;
+    a.top = c.top;
+    a.right = c.right;
     a.w = W;
     a.h = H;
 
     // the visible rectangle. Clamped to 1px so a panel taller than the viewport, or a zero-size
     // canvas during a resize, cannot produce a degenerate frustum.
-    const w = Math.max(W - c.left, 1);
-    const h = Math.max(H - c.bottom, 1);
+    const w = Math.max(W - c.left - c.right, 1);
+    const h = Math.max(H - c.top - c.bottom, 1);
 
     // the base frustum is the visible rectangle's, not the canvas's. r3f owns camera.aspect and
     // rewrites it on resize, which is why this re-asserts whenever W or H changes.
     camera.aspect = w / h;
-    if (c.left < EPS_PX && c.bottom < EPS_PX) {
+    if (c.left < EPS_PX && c.bottom < EPS_PX && c.top < EPS_PX && c.right < EPS_PX) {
       camera.clearViewOffset();
     } else {
-      camera.setViewOffset(w, h, -c.left, 0, W, H);
+      camera.setViewOffset(w, h, -c.left, -c.top, W, H);
     }
     camera.updateProjectionMatrix();
   });

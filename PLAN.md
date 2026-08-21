@@ -23,10 +23,12 @@ genuinely the world rather than a label on it".
 
 ## Open items
 
-1. **Rebuild the landing's first viewport as a ruled run sheet.** Replace the three-up stat row,
-   which is the hero-metric template the craft floor refuses. Corner rows, printed grid, deltas in
-   a real right margin, lap time monumental as page structure. Name the vehicle. Qualify the lap
-   time, since absolute lap times are estimated and not measured.
+1. ~~Rebuild the landing's first viewport as a ruled run sheet.~~ **Done.** The sheet carries a
+   masthead, a deck, the lap time monumental with its provenance under it, a bounded diagram
+   plate, live corner rows and a right margin. Two decisions worth knowing: the 3D is a *figure*
+   printed into the sheet rather than a backdrop (ViewOffset now takes four-sided insets and the
+   camera composes for the plate), and a corner row is the way in, so the cover is the first
+   instance of what the tool does. The margin column is a second live solve at μ0.95.
 2. ~~Self-host Archivo or drop it.~~ **Done.** Self-hosted via `@fontsource-variable/archivo`,
    weight axis only, imported in `main.tsx`. One 35 kB latin woff2 is fetched; the other two
    subsets are gated by unicode-range and never requested for a latin page. Note `--font-display`

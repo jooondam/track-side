@@ -76,8 +76,8 @@ export function CornerLabels({ trackLines, corners, exaggeration, insets }: Corn
       // already offset to compose into the same rectangle (see ViewOffset).
       const inset =
         p.x > insets.left + 70 &&
-        p.x < size.width - 70 &&
-        p.y > 12 &&
+        p.x < size.width - (insets.right ?? 0) - 70 &&
+        p.y > (insets.top ?? 0) + 12 &&
         p.y < size.height - insets.bottom - 12;
       const collides =
         !p.onScreen ||
