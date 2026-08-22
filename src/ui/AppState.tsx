@@ -11,7 +11,8 @@
 
 import type { LoadFailure } from "../assets";
 import type { TrackDefinition } from "../tracks";
-import { Button, Panel, Select } from "./primitives";
+import { Button, Select } from "./primitives";
+import { Icon } from "./Icon";
 
 interface AppStateProps {
   kind: "loading" | "error" | "webgl";
@@ -80,7 +81,21 @@ export function AppState({
       role={kind === "loading" ? "status" : "alert"}
       aria-live="polite"
     >
-      <Panel style={{ width: 400, maxWidth: "calc(100vw - 32px)", padding: "var(--s5)" }}>
+      {/* a sheet laid on the binder, not a card floating over the app. The world says the
+          interface is ruled paper, and a 400px rounded panel with a border on four sides was the
+          one surface still arguing with that. Same masthead, same double rule under it, same
+          left-aligned column as the cover: a reader who has seen the front page has already been
+          taught how to read this. */}
+      <div
+        style={{
+          width: 560,
+          maxWidth: "calc(100vw - 32px)",
+          background: "var(--panel)",
+          borderTop: "2px solid var(--line-strong)",
+          borderBottom: "1px solid var(--line)",
+          padding: "var(--s5) clamp(20px, 5vw, 40px) var(--s5)",
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -92,8 +107,12 @@ export function AppState({
             color: "var(--text-dim)",
           }}
         >
-          <span style={{ color: "var(--accent)" }}>◆</span> track-side
+          <span style={{ color: "var(--accent)", display: "flex" }}>
+            <Icon name="mark" size={10} />
+          </span>
+          track-side
         </div>
+        <div style={{ height: 2, background: "var(--line-strong)", marginTop: "var(--s2)" }} />
 
         <h1 style={{ margin: "var(--s3) 0 var(--s2)", fontSize: 18, fontWeight: 600 }}>{title}</h1>
 
@@ -169,12 +188,18 @@ export function AppState({
           <details style={{ marginTop: "var(--s3)" }}>
             <summary
               style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--s2)",
                 fontSize: 12,
                 color: "var(--text-dim)",
                 cursor: "pointer",
                 letterSpacing: "0.04em",
               }}
             >
+              <span className="ts-marker" style={{ display: "flex" }}>
+                <Icon name="next" size={12} />
+              </span>
               What the browser reported
             </summary>
             <p
@@ -191,7 +216,7 @@ export function AppState({
             </p>
           </details>
         )}
-      </Panel>
+      </div>
     </div>
   );
 }

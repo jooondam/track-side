@@ -18,6 +18,7 @@
 
 import { forwardRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { Icon } from "./Icon";
 
 /** the smallest type in the interface. 10px was below every floor the project set itself. */
 const LABEL_SIZE = 12;
@@ -441,8 +442,8 @@ export function Stat({
           )}
         </span>
         {trend && (
-          <span aria-hidden="true" style={{ fontSize: LABEL_SIZE, color: "var(--text-muted)" }}>
-            {trend === "up" ? "▲" : trend === "down" ? "▼" : "—"}
+          <span style={{ color: "var(--text-muted)", display: "flex" }}>
+            <Icon name={trend} size={9} />
           </span>
         )}
         {delta && (
@@ -484,6 +485,37 @@ export function formatDeltaS(seconds: number, digits = 2): string {
   return `${rounded < 0 ? "\u2212" : "+"}${Math.abs(rounded).toFixed(digits)} s`;
 }
 
+/**
+ * The canary duplicate: the second sheet of the run plan, and the surface that says "this is the
+ * other solve". Everything about the ghost sits on it, and nothing else does, so the colour is a
+ * role rather than a decoration. That claim was in the token layer from the start and was true of
+ * nothing on screen until this existed.
+ *
+ * It rebinds --text-dim to the muted tone, which is not a style choice. The canary is darker than
+ * the top sheet by design, and the dim tone is specified to 4.6:1 against the top sheet, so it
+ * lands at 4.28:1 here and fails AA. The dark rendition does the same thing from the other
+ * direction: its raised sheet is lighter than its panel, and dim lands at 4.42:1. AA is binding
+ * for this work, so on this surface the dim tone is the muted one.
+ */
+export function RaisedSheet({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={
+        {
+          background: "var(--panel-raised)",
+          border: "1px solid var(--line)",
+          padding: "var(--s3)",
+          display: "grid",
+          gap: "var(--s3)",
+          "--text-dim": "var(--text-muted)",
+        } as React.CSSProperties
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
 export function Kbd({ children }: { children: ReactNode }) {
   return (
     <kbd
@@ -504,7 +536,18 @@ export function Kbd({ children }: { children: ReactNode }) {
   );
 }
 
-/** a labelled <select> drawn as a filled-in field rather than as a styled control. */
+/**
+ * A labelled <select> drawn as a ruled field: a box on the sheet, with the mark this world draws
+ * rather than the one the platform draws.
+ *
+ * appearance:none is the whole point. Left native, this control arrived with the host's own
+ * corner radius, its own arrow at its own weight, and on macOS a blue focus ring, which is three
+ * different design systems visible inside one field. The option list itself is drawn by the OS
+ * and cannot be styled by anyone; that is the honest boundary of this fix.
+ *
+ * An option whose value is empty is a placeholder, so it is disabled: it was selectable, and
+ * choosing it did nothing at all, which is a control that lies about being a control.
+ */
 export function Select({
   label,
   value,
@@ -533,22 +576,36 @@ export function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{
+          appearance: "none",
+          WebkitAppearance: "none",
           minHeight: 28,
           maxWidth: 240,
-          padding: "0 var(--s2)",
+          padding: "0 26px 0 var(--s2)",
           background: "transparent",
           border: "1px solid var(--line)",
+          borderRadius: 0,
           color: "var(--text)",
           fontSize: 14,
           fontWeight: 500,
+          width: "100%",
         }}
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value}>
+          <option key={o.value} value={o.value} disabled={o.value === ""}>
             {o.label}
           </option>
         ))}
       </select>
+      <span
+        style={{
+          marginLeft: -22,
+          pointerEvents: "none",
+          color: "var(--text-muted)",
+          display: "flex",
+        }}
+      >
+        <Icon name="caret" size={14} />
+      </span>
     </span>
   );
 }

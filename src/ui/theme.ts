@@ -331,6 +331,14 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
+/* the last platform control drawing its own mark: a disclosure triangle at the host's weight,
+   inside a world that draws its own. Hidden here, redrawn in the summary itself. */
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }
+.ts-marker { transition: transform var(--t-fast) var(--ease); }
+details[open] > summary .ts-marker { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .ts-marker { transition: none; } }
+
 /* numerals never reflow as they tick */
 .tnum { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 

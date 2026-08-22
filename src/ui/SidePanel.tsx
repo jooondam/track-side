@@ -2,12 +2,13 @@
 // expanded it is five labelled groups. Replaces the old single 250px box that carried eight
 // ungrouped rows of buttons and never got out of the way of the circuit.
 
-import { Button, ButtonGroup, Check, IconButton, Panel, Section, Select, Slider, Stat, formatDeltaS } from "./primitives";
+import { Button, ButtonGroup, Check, IconButton, Panel, RaisedSheet, Section, Select, Slider, Stat, formatDeltaS } from "./primitives";
 import { TOPBAR_H, formatLapTime } from "./TopBar";
 import type { Expandable } from "./useExpandable";
 import type { ColorMode } from "../render/RacingLine";
 import type { Viewpoint } from "../render/viewpoints";
 import { deltaToGhost } from "../solver/lapTime";
+import { Icon } from "./Icon";
 
 export interface HoverInfo {
   sM: number;
@@ -127,7 +128,7 @@ export function SidePanel(props: SidePanelProps) {
                   active={panel.pinned}
                   onClick={panel.togglePin}
                 >
-                  {panel.pinned ? "◉" : "○"}
+                  <Icon name={panel.pinned ? "pinned" : "unpinned"} size={14} />
                 </IconButton>
               )
             }
@@ -160,14 +161,16 @@ export function SidePanel(props: SidePanelProps) {
               note={`solved for a GT3 model at \u03bc${props.mu.toFixed(2)}, not measured`}
             />
             {ghostDelta !== null && (
-              <Stat
-                label="vs ghost"
-                value={formatLapTime(props.ghostLapTimeS as number)}
-                delta={formatDeltaS(ghostDelta)}
-                deltaTone={ghostDelta <= 0 ? "pos" : "neg"}
-                size="sm"
-                note={"reference grip \u03bc1.20, negative is quicker"}
-              />
+              <RaisedSheet>
+                <Stat
+                  label="vs ghost"
+                  value={formatLapTime(props.ghostLapTimeS as number)}
+                  delta={formatDeltaS(ghostDelta)}
+                  deltaTone={ghostDelta <= 0 ? "pos" : "neg"}
+                  size="sm"
+                  note={"reference grip \u03bc1.20, negative is quicker"}
+                />
+              </RaisedSheet>
             )}
             {props.hoverInfo && (
               <div
@@ -223,7 +226,10 @@ export function SidePanel(props: SidePanelProps) {
               onClick={() => props.onPlayingChange(!props.playing)}
               style={{ alignSelf: "flex-start", minWidth: 108 }}
             >
-              {props.playing ? "❙❙  Pause" : "▶  Play"}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--s2)" }}>
+                <Icon name={props.playing ? "pause" : "play"} size={13} />
+                {props.playing ? "Pause" : "Play"}
+              </span>
             </Button>
             <ButtonGroup label="Playback speed">
               {[0.5, 1, 5, 10].map((mult) => (
@@ -236,12 +242,15 @@ export function SidePanel(props: SidePanelProps) {
                 </Button>
               ))}
             </ButtonGroup>
-            <Check
-              label="Ghost car"
-              note="a second solve at the reference grip, μ1.20"
-              checked={props.ghostEnabled}
-              onChange={props.onGhostEnabledChange}
-            />
+            {/* the control for the second solve sits on the second sheet, same as its readout */}
+            <RaisedSheet>
+              <Check
+                label="Ghost car"
+                note="a second solve at the reference grip, μ1.20"
+                checked={props.ghostEnabled}
+                onChange={props.onGhostEnabledChange}
+              />
+            </RaisedSheet>
           </Section>
 
           <Section label="Display">
@@ -342,7 +351,7 @@ function CollapsedRail({
           onClick={() => onPlayingChange(!playing)}
           active={playing}
         >
-          {playing ? "❙❙" : "▶"}
+          <Icon name={playing ? "pause" : "play"} size={13} />
         </IconButton>
       </div>
       {/* the critique found the rail gave no sign at all that it opened: no chevron, no grip, no
@@ -358,12 +367,11 @@ function CollapsedRail({
           transform: "translateY(-50%)",
           padding: "var(--s3) 2px",
           borderLeft: "1px solid var(--line)",
-          fontSize: 12,
           lineHeight: 1,
           color: "var(--text-muted)",
         }}
       >
-        ›
+        <Icon name="next" size={12} />
       </div>
     </div>
   );
@@ -393,7 +401,7 @@ export function ViewpointPill({
       }}
     >
       <IconButton label="Previous viewpoint" onClick={onPrev}>
-        ‹
+        <Icon name="prev" size={14} />
       </IconButton>
       <span
         style={{
@@ -408,7 +416,7 @@ export function ViewpointPill({
         {viewpoint.label}
       </span>
       <IconButton label="Next viewpoint" onClick={onNext}>
-        ›
+        <Icon name="next" size={14} />
       </IconButton>
     </Panel>
   );

@@ -35,12 +35,17 @@ genuinely the world rather than a label on it".
    is set on html, body and #root, so this is the whole interface, not a headline treatment, and
    every screenshot taken before this shows the wrong face. Greek mu falls outside the latin
    subset, so U+03BC alone still renders in the fallback.
-3. **Bind `panelRaised` or strike it.** Declared at `theme.ts:19`, valued at `:104` and `:159`,
-   mapped to `--panel-raised` at `:248`, consumed nowhere. It carries the promise that the sheet
-   you are reading tells you which solve you are reading.
-4. **Replace the 16 unicode glyph icon sites with drawn SVG.**
-5. **Theme the native selects, restate the error card as a ruled block.** Presentation only: the
-   error path's behaviour is fixed and verified, do not regress it.
+3. ~~Bind `panelRaised` or strike it.~~ **Done.** Bound, via a `RaisedSheet` primitive. The
+   ghost's readout and the ghost's own control both sit on the canary duplicate and nothing else
+   does, so the colour is a role. It rebinds `--text-dim` to the muted tone on that surface,
+   because the canary is darker than the top sheet and dim lands at 4.28:1 there, which fails AA.
+4. ~~Replace the 16 unicode glyph icon sites with drawn SVG.~~ **Done.** `src/ui/Icon.tsx`, 15
+   marks on a 16-unit grid. The two arrows left in HelpOverlay are key caps naming the arrow keys,
+   which is text about a key rather than an icon.
+5. ~~Theme the native selects, restate the error card as a ruled block.~~ **Done.** Both were
+   platform controls leaking into the world; so was the `<details>` marker, which is now drawn and
+   rotates on open. The error surface is a sheet on the binder with the cover's own masthead and
+   double rule. Behaviour untouched, and `verify-p0.mjs` still passes the error path.
 6. **Derive the dark rendition as stock under a lamp,** not leather grain.
 7. ~~Fix the ghost delta sign inversion.~~ **Done.** One exported `deltaToGhost(car, ghost)`
    in `solver/lapTime.ts`, used by all four sites, pinned by a test. Note that the critique

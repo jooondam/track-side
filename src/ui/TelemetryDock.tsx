@@ -26,6 +26,7 @@ import type { LapTimeTable } from "../solver/lapTime";
 import { deltaToGhost } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
 import type { Corner } from "../assets";
+import { Icon } from "./Icon";
 
 /** the always-visible strip carrying the live readout */
 export const DOCK_STRIP_H = 34;
@@ -150,7 +151,7 @@ export function TelemetryDock(props: TelemetryDockProps) {
           active={dock.pinned}
           onClick={dock.togglePin}
         >
-          {dock.pinned ? "◉" : "○"}
+          <Icon name={dock.pinned ? "pinned" : "unpinned"} size={14} />
         </IconButton>
       </div>
 

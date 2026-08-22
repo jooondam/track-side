@@ -6,6 +6,7 @@
 import { IconButton, Select } from "./primitives";
 import { useTheme } from "./theme";
 import type { TrackDefinition } from "../tracks";
+import { Icon } from "./Icon";
 
 interface TopBarProps {
   tracks: TrackDefinition[];
@@ -62,7 +63,7 @@ export function TopBar({
           active={controlsOpen}
           onClick={onToggleControls}
         >
-          ☰
+          <Icon name="menu" />
         </IconButton>
       )}
 
@@ -78,7 +79,9 @@ export function TopBar({
           whiteSpace: "nowrap",
         }}
       >
-        <span style={{ color: "var(--accent)" }}>◆</span>
+        <span style={{ color: "var(--accent)", display: "flex" }}>
+          <Icon name="mark" size={11} />
+        </span>
         <span style={{ color: "var(--text)" }}>track-side</span>
       </h1>
 
@@ -137,10 +140,10 @@ export function TopBar({
           label={theme === "dark" ? "Read the top sheet" : "Read under the work lamp"}
           onClick={toggleTheme}
         >
-          {theme === "dark" ? "☀" : "☾"}
+          <Icon name={theme === "dark" ? "sun" : "moon"} />
         </IconButton>
         <IconButton label="Keyboard and mouse guide" onClick={onHelp} active={helpOpen}>
-          ?
+          <Icon name="help" />
         </IconButton>
       </div>
     </header>
