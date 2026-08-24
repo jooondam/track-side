@@ -21,7 +21,7 @@
 // number an engineer can check rather than as a sentence.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, MU, formatDeltaS } from "./primitives";
+import { Button, CANARY, MU, formatDeltaS } from "./primitives";
 import { formatLapTime } from "./TopBar";
 import type { CornerRow } from "./cornerRows";
 import type { Corner } from "../assets";
@@ -398,13 +398,25 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                   <th scope="col" style={{ textAlign: "right", fontWeight: 500, padding: "0 0 4px" }}>
                     time <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>s</span>
                   </th>
-                  {/* the margin: ruled off from the table proper, the way an annotation is */}
+                  {/* the margin, and **it is on the canary**.
+ 
+                      This column is the same lap solved a second time. The duplicate already
+                      means exactly that everywhere else in the product: the ghost's readout and
+                      the ghost's own control sit on the canary and nothing else does, so the
+                      colour is a role rather than a decoration. The cover was the one place
+                      carrying a second solve without honouring it, which left half the world's
+                      name unused on the first thing a visitor sees.
+ 
+                      Ruled off from the table proper the way an annotation is, and the ground
+                      runs the full height of the column, head included, so it reads as a sheet
+                      underneath rather than as a highlight on top. */}
                   <th
                     scope="col"
                     style={{
+                      ...CANARY,
                       textAlign: "right",
                       fontWeight: 500,
-                      padding: "0 0 4px var(--s4)",
+                      padding: "0 var(--s2) 4px var(--s4)",
                       borderLeft: RULE,
                       width: "1%",
                       whiteSpace: "nowrap",
@@ -444,8 +456,9 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                     <td
                       className="tnum"
                       style={{
+                        ...CANARY,
                         textAlign: "right",
-                        padding: "5px 0 5px var(--s4)",
+                        padding: "5px var(--s2) 5px var(--s4)",
                         borderLeft: RULE,
                         color: row.deltaS === null || row.deltaS <= 0 ? "var(--pos)" : "var(--neg)",
                       }}

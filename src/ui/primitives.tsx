@@ -516,19 +516,38 @@ export function formatDeltaS(seconds: number, digits = 2): string {
  * direction: its raised sheet is lighter than its panel, and dim lands at 4.42:1. AA is binding
  * for this work, so on this surface the dim tone is the muted one.
  */
+/**
+ * the canary duplicate as a *surface* rather than as a component, so anything can sit on it: a
+ * panel, or one column of a table.
+ *
+ * It carries two token rebindings, and both are measured rather than precautionary. The canary is
+ * darker than the top sheet in both renditions, so ink that clears AA on the top sheet does not
+ * necessarily clear it here:
+ *
+ *   - `--text-dim` lands at 4.28:1 on the canary in daylight and 4.26:1 under the lamp, against a
+ *     4.5:1 floor. Rebound to the muted tone, which clears at 6.66 and 5.52.
+ *   - `--neg` lands at 4.27:1 under the lamp. **This was a live defect, not a hypothetical**: the
+ *     ghost's delta readout in the rail is drawn in `var(--neg)` and has sat on this surface since
+ *     the canary was bound. Rebound to the deeper pencil, which clears at 8.31 and 6.29.
+ *
+ * `--pos` needs no help: 5.94 and 5.19.
+ */
+export const CANARY = {
+  background: "var(--panel-raised)",
+  "--text-dim": "var(--text-muted)",
+  "--neg": "var(--accent-on)",
+} as React.CSSProperties;
+
 export function RaisedSheet({ children }: { children: ReactNode }) {
   return (
     <div
-      style={
-        {
-          background: "var(--panel-raised)",
-          border: "1px solid var(--line)",
-          padding: "var(--s3)",
-          display: "grid",
-          gap: "var(--s3)",
-          "--text-dim": "var(--text-muted)",
-        } as React.CSSProperties
-      }
+      style={{
+        ...CANARY,
+        border: "1px solid var(--line)",
+        padding: "var(--s3)",
+        display: "grid",
+        gap: "var(--s3)",
+      }}
     >
       {children}
     </div>

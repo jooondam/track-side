@@ -114,6 +114,32 @@ const CHANNEL_PAIRS: [keyof ThemeTokens, keyof ThemeTokens][] = [
   ["phaseAccel", "panel"], ["phaseBrake", "panel"], ["phaseCoast", "panel"],
 ];
 
+// the canary duplicate is darker than the top sheet in both renditions, so it gets its own pass.
+// primitives.tsx's CANARY surface rebinds two tokens to clear these floors; the raw values are
+// asserted here as *failing*, because that is the whole reason the rebinding exists and a future
+// palette change that quietly fixed them should force someone to read this.
+describe.each(["light", "dark"] as ThemeName[])("%s canary duplicate", (name) => {
+  const t = THEMES[name];
+  it("pos needs no rebinding", () => {
+    expect(contrast(t.pos, t.panelRaised)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("the rebound tokens clear the floor on it", () => {
+    // CANARY maps --text-dim to the muted tone and --neg to the deeper pencil
+    expect(contrast(t.textMuted, t.panelRaised)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(t.accentOn, t.panelRaised)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("textDim raw does not, which is why CANARY rebinds it", () => {
+    expect(contrast(t.textDim, t.panelRaised)).toBeLessThan(4.5);
+  });
+});
+
+it("neg raw fails on the canary under the lamp, which is why CANARY rebinds it", () => {
+  // this was shipped: the ghost's delta readout in the rail is drawn in var(--neg) and sits on
+  // the canary, so the lamp rendition was serving it at 4.27:1 until CANARY was introduced
+  expect(contrast(THEMES.dark.neg, THEMES.dark.panelRaised)).toBeLessThan(4.5);
+  expect(contrast(THEMES.light.neg, THEMES.light.panelRaised)).toBeGreaterThanOrEqual(4.5);
+});
+
 describe.each(["light", "dark"] as ThemeName[])("%s contrast", (name) => {
   const t = THEMES[name];
   it.each(TEXT_PAIRS)("%s on %s clears 4.5:1", (fg, bg) => {
