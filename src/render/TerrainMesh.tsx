@@ -117,6 +117,9 @@ uniform float uFarGrow;
 uniform float uTwinkle;
 uniform float uTime;
 uniform float uMotion;
+// ink density. 1 is the drawn-from-life field; below 1 deepens the tint toward the weight a
+// printed mark has, for the cover's plate. See the printed prop on this component.
+uniform float uInkGain;
 
 attribute vec3  aTint;
 attribute float aPhase;
@@ -152,7 +155,7 @@ void main() {
   float rate = 0.35 + 0.5 * aPhase;
   float tw   = uMotion * uTwinkle * sin( uTime * rate + aPhase * 6.2831853 );
 
-  vTint  = aTint * ( 1.0 + tw );
+  vTint  = aTint * ( 1.0 + tw ) * uInkGain;
   vAlpha = ( 1.0 - far ) * mix( 1.0, 0.55, far ) * grazeFade( worldPos );
 
   // sizeAttenuation is deliberately absent and cannot be recovered here: three only maintains
@@ -209,6 +212,8 @@ void main() {
 `;
 
 const WIRE_VERTEX = /* glsl */ `
+uniform float uInkGain;
+
 attribute vec3 aTint;
 
 varying vec3  vTint;
@@ -228,7 +233,7 @@ void main() {
 
   // no twinkle on the lattice: twinkling lines read as noise rather than as atmosphere, and the
   // lattice is the layer that has to stay legible as a survey grid
-  vTint  = aTint;
+  vTint  = aTint * uInkGain;
   vAlpha = ( 1.0 - far ) * grazeFade( worldPos );
 
   #include <fog_vertex>
@@ -264,9 +269,23 @@ interface TerrainMeshProps {
   extent: number;
   exaggeration: number;
   reducedMotion: boolean;
+  /**
+   * draw the field as a printed figure rather than as landscape seen through air.
+   *
+   * True only for the cover's diagram plate, and the split is the honest one: on the cover the
+   * field is a figure printed into a sheet, and print has a floor ink density and a boundary. In
+   * the viewer it is terrain you fly through, where recession is what distance looks like and the
+   * radial fade is load-bearing (see terrainGrid.ts, where the plateau edge it hides is a
+   * measured defect rather than a preference).
+   *
+   * What changes: the tint deepens to an ink weight, the dots stop growing and twinkling with
+   * distance, fog is off so the field ends rather than dissolving toward the sky, and the fade is
+   * compressed into a short band so the printed area has an edge instead of an atmosphere.
+   */
+  printed?: boolean;
 }
 
-export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: TerrainMeshProps) {
+export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion, printed = false }: TerrainMeshProps) {
   const tokens = useThemeTokens();
 
   const rampColor = useMemo(() => {
@@ -453,25 +472,27 @@ export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: Te
           ...shared(),
           uTime: { value: 0 },
           uMotion: { value: reducedMotion ? 0 : 1 },
-          uFadeStart: { value: radii.fadeStart },
+          uFadeStart: { value: printed ? radii.fadeEnd * 0.88 : radii.fadeStart },
           uFadeEnd: { value: radii.fadeEnd },
+          uInkGain: { value: printed ? 0.72 : 1 },
           // these used to fork on the theme, and the dark half of the fork was a star field:
           // brighter, larger, twinklier dots blended additively onto a night sky. Both renditions
           // are printed sheets now, so there is one set of values and it is the printed one. A
           // page does not twinkle, but 0 is worse: at zero the field reads as a static screen
           // rather than as stippling, so the shimmer stays, faint.
-          uTwinkle: { value: 0.12 },
-          uSize: { value: 2.0 },
-          uFarGrow: { value: 1.4 },
-          uSharpNear: { value: 3.6 },
-          uSharpFar: { value: 1.6 },
-          uOpacity: { value: 0.6 },
+          uTwinkle: { value: printed ? 0 : 0.12 },
+          uSize: { value: printed ? 1.7 : 2.0 },
+          uFarGrow: { value: printed ? 1.0 : 1.4 },
+          uSharpNear: { value: printed ? 4.2 : 3.6 },
+          uSharpFar: { value: printed ? 4.0 : 1.6 },
+          uOpacity: { value: printed ? 0.95 : 0.6 },
           uPixelRatio: { value: 1 },
         },
       ]),
       // ShaderMaterial defaults fog to false and does not populate the fog uniforms; both halves
-      // are needed or the USE_FOG define arrives with nothing behind it
-      fog: true,
+      // are needed or the USE_FOG define arrives with nothing behind it. Printed, there is no
+      // air to haze through, so the layer carries no fog at all.
+      fog: !printed,
       transparent: true,
       depthWrite: false,
       toneMapped: false,
@@ -488,12 +509,13 @@ export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: Te
         THREE.UniformsLib.fog,
         {
           ...shared(),
-          uFadeStart: { value: radii.wireFadeStart },
+          uFadeStart: { value: printed ? radii.wireFadeEnd * 0.88 : radii.wireFadeStart },
           uFadeEnd: { value: radii.wireFadeEnd },
-          uOpacity: { value: 0.32 },
+          uInkGain: { value: printed ? 0.72 : 1 },
+          uOpacity: { value: printed ? 0.55 : 0.32 },
         },
       ]),
-      fog: true,
+      fog: !printed,
       transparent: true,
       depthWrite: false,
       toneMapped: false,
@@ -524,7 +546,7 @@ export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: Te
     return { dotMaterial: dot, wireMaterial: wireMat, occluderMaterial: occluder };
     // reducedMotion seeds uMotion here and is driven by the effect below, so it is not a dep
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor, radii, tokens.sceneBg, tokens.sceneFog]);
+  }, [anchor, radii, printed, tokens.sceneBg, tokens.sceneFog]);
 
   useEffect(
     () => () => {

@@ -177,6 +177,7 @@ export function Scene({
         extent={extent}
         exaggeration={exaggeration}
         reducedMotion={reducedMotion}
+        printed={orbiting}
       />
 
       {/* the outline loads from JSON well before the GLB, so it stands in as the suspense
