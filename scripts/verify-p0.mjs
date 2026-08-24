@@ -1,6 +1,12 @@
-// one-off verification for the two P0 fixes: the camera composing for the unoccluded rectangle,
-// and the error path. Captures the exact configurations the critique found broken, at the exact
-// viewports it found them at, plus the error card that used to print a JSON parser message.
+// review captures at real viewports. It began as one-off verification for the two P0 fixes, the
+// camera composing for the unoccluded rectangle and the error path, at the exact configurations
+// and viewports the critique found broken.
+//
+// It now also photographs the landing, and that is not a small addition. **Every case here and in
+// shots.mjs used to carry `enter=1`**, and App.tsx sets `showLanding = !initial.enter`, so the
+// shipped first view was the one surface neither harness had ever captured: the surface a finish
+// review returned "rebuild" against, and the surface PRODUCT.md's primary user meets on arrival.
+// Adding cases was the fix; re-running was not.
 //
 //   node scripts/verify-p0.mjs      (expects `npm run build` to have run)
 
@@ -17,6 +23,14 @@ const SETTLE_FRAMES = 90;
 const READY_TIMEOUT_MS = 60_000;
 
 // [name, viewport, query, pins, opts]
+//
+// opts.landing omits `enter`, so the cover sheet renders. It also takes a second frame, suffixed
+// `-full`, with the viewport grown to the sheet's own scroll height, because the sheet scrolls
+// inside `.ts-sheet` rather than moving the document: Playwright's `fullPage` measures the
+// document, which is pinned to 100% height by theme.ts, so it would return the fold and call it
+// the page. Growing the viewport is faithful here because every vh-derived length on the cover is
+// inside a clamp() that saturates well before these heights; the run logs the plate's measured
+// height at both viewports so the distortion is a number rather than a hope.
 const CASES = [
   ["desktop-both-pinned", { width: 1600, height: 900 }, "circuit=spa&view=overview&enter=1", { dock: true, side: true }],
   ["desktop-at-rest", { width: 1600, height: 900 }, "circuit=spa&view=overview&enter=1", {}],
@@ -28,6 +42,17 @@ const CASES = [
   // the work-lamp rendition, at the modal review size. It is derived from the light one rather
   // than designed beside it (src/ui/theme.ts), so this frame is the check on that derivation.
   ["lamp-both-pinned", { width: 1440, height: 900 }, "circuit=spa&view=overview&enter=1&theme=dark", { dock: true, side: true }],
+  // the cover sheet, which is what arriving from an application link actually shows. Light at
+  // three widths, because the plate takes four-sided insets and the margin column is a second
+  // live solve, and both reflow; lamp at the modal review size, because 7b16d34 removed the night
+  // scene and the printed figure is where that removal is most exposed.
+  ["landing-laptop", { width: 1440, height: 900 }, "circuit=spa&theme=light", {}, { landing: true }],
+  ["landing-desktop", { width: 1600, height: 900 }, "circuit=spa&theme=light", {}, { landing: true }],
+  ["landing-mobile", { width: 390, height: 844 }, "circuit=spa&theme=light", {}, { landing: true }],
+  ["landing-lamp", { width: 1440, height: 900 }, "circuit=spa&theme=dark", {}, { landing: true }],
+  // the entry transition is the cover's only motion promise: it hands the camera from the cover's
+  // plate to the viewer's own insets. This frame is the far end of that handover.
+  ["landing-after-enter", { width: 1440, height: 900 }, "circuit=spa&theme=light", {}, { landing: true, thenEnter: true }],
   // the error path: a circuit that does not exist. The dev/preview server answers with
   // index.html at 200, which is exactly the case that used to surface as a parser message.
   ["error-no-such-circuit", { width: 1440, height: 900 }, "circuit=nope&enter=1", {}, { expectError: true }],
@@ -65,6 +90,19 @@ async function startServer(port) {
     await new Promise((r) => setTimeout(r, 250));
   }
   return { child, base };
+}
+
+/** let the scene reach a steady frame. Wall-clock waits are flaky here; rAF counts are not. */
+async function settle(page) {
+  await page.evaluate(
+    (frames) =>
+      new Promise((done) => {
+        let left = frames;
+        const tick = () => (left-- > 0 ? requestAnimationFrame(tick) : done());
+        requestAnimationFrame(tick);
+      }),
+    SETTLE_FRAMES,
+  );
 }
 
 async function main() {
@@ -120,20 +158,47 @@ async function main() {
         await page.waitForFunction(() => window.__trackSideReady === true, null, {
           timeout: READY_TIMEOUT_MS,
         });
-        await page.evaluate(
-          (frames) =>
-            new Promise((done) => {
-              let left = frames;
-              const tick = () => (left-- > 0 ? requestAnimationFrame(tick) : done());
-              requestAnimationFrame(tick);
-            }),
-          SETTLE_FRAMES,
-        );
+        await settle(page);
+      }
+
+      if (opts.thenEnter) {
+        // the cover's own way in, clicked rather than simulated by a query parameter, so the
+        // camera handover this frame is here to show is the one a visitor gets
+        await page.getByRole("button", { name: /open the circuit/i }).click();
+        await settle(page);
       }
 
       const file = resolve(OUT, `${name}.png`);
       await page.screenshot({ path: file });
       console.log(`${name}  ${viewport.width}x${viewport.height}  ${file}${errors.length ? `  ERRORS: ${errors.join(" | ")}` : ""}`);
+
+      if (opts.landing && !opts.thenEnter) {
+        const sheet = page.locator(".ts-sheet");
+        const plateAt = () => page.locator("figure, .ts-sheet > div[aria-hidden=true]").first().boundingBox();
+        const short = await plateAt();
+        // growing the viewport saturates the cover's vh clamps, which makes the sheet *taller*
+        // than the height just measured, so one pass leaves the footer cut off. Two passes are
+        // enough because the clamps have nothing left to give on the second: the loop asserts
+        // that rather than assuming it.
+        let height = await sheet.evaluate((el) => el.scrollHeight);
+        if (height > viewport.height) {
+          for (let pass = 0; pass < 3; pass++) {
+            await page.setViewportSize({ width: viewport.width, height });
+            await settle(page);
+            const grown = await sheet.evaluate((el) => el.scrollHeight);
+            if (grown <= height) break;
+            height = grown;
+          }
+          const tall = await plateAt();
+          const fullFile = resolve(OUT, `${name}-full.png`);
+          await page.screenshot({ path: fullFile });
+          console.log(
+            `${name}-full  ${viewport.width}x${height}  ${fullFile}` +
+              `  plate ${Math.round(short?.height ?? 0)}px -> ${Math.round(tall?.height ?? 0)}px`,
+          );
+        }
+      }
+
       await page.close();
     }
   } finally {
