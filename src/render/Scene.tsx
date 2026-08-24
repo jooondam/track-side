@@ -17,6 +17,7 @@ import { CarMarker, type LapProgress } from "./CarMarker";
 import { CarTrail } from "./CarTrail";
 import { CornerLabels } from "./CornerLabels";
 import { ViewOffset, type ViewInsets } from "./ViewOffset";
+import { CAMERA_FOV_DEG } from "./viewpoints";
 import { Kerbs } from "./Kerbs";
 import { Landmarks } from "./Landmarks";
 import { RacingLine, type ColorMode } from "./RacingLine";
@@ -102,6 +103,9 @@ export function Scene({
         position: [center[0], extent * 0.5, center[2] + extent * 0.6],
         far: extent * 12,
         near: 1,
+        // stated rather than inherited from three's default, because viewpoints.ts solves the
+        // fitted distances against this exact number
+        fov: CAMERA_FOV_DEG,
       }}
       dpr={[1, 2]}
       // the sheet the diagram block is printed on, in CSS as well as in the scene. The scene

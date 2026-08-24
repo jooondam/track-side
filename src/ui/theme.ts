@@ -525,6 +525,23 @@ export function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+/** live window size. The fitted viewpoints solve their distance against the rectangle the chrome
+ *  leaves uncovered, so a resize that never crosses a breakpoint still has to re-fit; a media
+ *  query alone would miss every one of them. */
+export function useViewportSize(): { width: number; height: number } {
+  const [size, setSize] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
+  useEffect(() => {
+    const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return size;
+}
+
 export function usePrefersReducedMotion(): boolean {
   return useMediaQuery("(prefers-reduced-motion: reduce)");
 }

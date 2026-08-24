@@ -23,6 +23,10 @@ export interface Viewpoint {
   target?: [number, number, number];
 }
 
+/** the camera's vertical field of view. Scene.tsx sets this on the Canvas and the fitted
+ *  viewpoints solve against it, so the two cannot drift apart. */
+export const CAMERA_FOV_DEG = 50;
+
 const CORNER_OUT_M = 62; // how far outside the turn the camera stands
 const CORNER_UP_M = 26;
 
@@ -81,16 +85,105 @@ function cornerViewpoint(lines: TrackLines, corner: Corner, yScale: number): Vie
   };
 }
 
+/**
+ * The distance from `target`, along `dir`, at which every one of `corners` lands inside the
+ * frustum.
+ *
+ * This replaces a hand-tuned scalar. The whole-circuit viewpoints used to stand at a fixed
+ * multiple of the circuit's extent, `extent * 0.5` up and `extent * 0.6` back, with a single
+ * `fit` number that was 1.7 in portrait and 1 everywhere else. That is not a fit: it never
+ * consulted the frame it was composing for, so the same pose had to serve a 1600x900 window with
+ * no panels and the much wider, much shorter rectangle left over when the rail and the dock are
+ * both open. One of the two was always wrong, and at rest the circuit ran off the bottom edge.
+ *
+ * The solve is exact and closed-form rather than iterative, because the camera's own offset does
+ * not move a point sideways in view space. Put the camera at `target + D * dir` and let
+ * `q = P - target`. In the camera's basis the lateral coordinates of P are `q·right` and `q·up`,
+ * neither of which contains D; only the depth does, at `D - q·dir`. So containment
+ *
+ *     |q·right| <= tanH * depth      and      |q·up| <= tanV * depth
+ *
+ * rearranges to a lower bound on D for each corner, and the answer is the largest of them.
+ *
+ * `margin` is applied to the tangents rather than to the result, so it is a true border in
+ * frame-fraction terms at any aspect: 1.06 keeps the subject off the edge by about 3% a side.
+ */
+export function fitDistance(
+  corners: readonly (readonly [number, number, number])[],
+  target: readonly [number, number, number],
+  dir: readonly [number, number, number],
+  fovDeg: number,
+  aspect: number,
+  margin = 1.06,
+): number {
+  const dl = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+  const u: [number, number, number] = [dir[0] / dl, dir[1] / dl, dir[2] / dl];
+
+  // a reference that is not parallel to the view direction, so the basis never degenerates. The
+  // plan view looks straight down, which is exactly where world up would collapse the cross
+  // product to zero.
+  const ref: [number, number, number] = Math.abs(u[1]) > 0.999 ? [0, 0, 1] : [0, 1, 0];
+  let rx = ref[1] * u[2] - ref[2] * u[1];
+  let ry = ref[2] * u[0] - ref[0] * u[2];
+  let rz = ref[0] * u[1] - ref[1] * u[0];
+  const rl = Math.hypot(rx, ry, rz) || 1;
+  rx /= rl;
+  ry /= rl;
+  rz /= rl;
+  const vx = u[1] * rz - u[2] * ry;
+  const vy = u[2] * rx - u[0] * rz;
+  const vz = u[0] * ry - u[1] * rx;
+
+  const tanV = Math.tan(((fovDeg / 2) * Math.PI) / 180) / margin;
+  const tanH = tanV * aspect;
+
+  let d = 0;
+  for (const p of corners) {
+    const qx = p[0] - target[0];
+    const qy = p[1] - target[1];
+    const qz = p[2] - target[2];
+    const x = Math.abs(qx * rx + qy * ry + qz * rz);
+    const y = Math.abs(qx * vx + qy * vy + qz * vz);
+    const w = qx * u[0] + qy * u[1] + qz * u[2];
+    d = Math.max(d, Math.max(x / tanH, y / tanV) + w);
+  }
+  return d;
+}
+
+/** the eight corners of the racing line's bounding box, with elevation scaled as it is drawn. */
+export function lineBoxCorners(line: LineData, yScale: number): [number, number, number][] {
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0; i < line.nPoints; i++) {
+    const x = line.positionYup[3 * i];
+    const y = line.positionYup[3 * i + 1] * yScale;
+    const z = line.positionYup[3 * i + 2];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  const out: [number, number, number][] = [];
+  for (const x of [minX, maxX]) for (const y of [minY, maxY]) for (const z of [minZ, maxZ]) out.push([x, y, z]);
+  return out;
+}
+
 export function buildViewpoints(
   line: LineData,
   trackLines: TrackLines,
   corners: Corner[],
   center: readonly [number, number, number],
-  extent: number,
   yScale: number,
-  /** >1 pulls the fitted viewpoints back. A portrait phone frames far less width than a desktop
-   *  window at the same distance, so the whole-circuit shots have to stand further off. */
-  fit = 1,
+  /** the aspect of the rectangle the chrome leaves uncovered, not the canvas's. The whole-circuit
+   *  viewpoints solve their own distance against it, which is what makes them fit a phone in
+   *  portrait and a wide short strip between an open rail and an open dock without a hand-tuned
+   *  number for either. */
+  aspect: number,
+  /** the camera's vertical field of view, in degrees */
+  fovDeg: number,
 ): Viewpoint[] {
   const startX = line.positionYup[0];
   const startY = line.positionYup[1] * yScale;
@@ -101,21 +194,42 @@ export function buildViewpoints(
   const dz = line.positionYup[3 * aheadIdx + 2] - startZ;
   const dLen = Math.max(Math.hypot(dx, dz), 1e-6);
 
+  // the two whole-circuit shots keep their composition angle and solve only their distance. The
+  // angles are the ones the old fixed poses implied, normalised: a raised three-quarter for the
+  // overview, and near vertical for the plan.
+  const box = lineBoxCorners(line, yScale);
+  const wholeTarget: [number, number, number] = [center[0], 0, center[2]];
+  // the margin is larger than fitDistance's own default, and the reason is not taste. The box is
+  // the racing line's, and the corner labels are drawn in screen space *outside* it, anchored
+  // above their point. A geometric fit to the line alone is therefore not a fit to what is on
+  // screen: at 1.06 the plan view put La Source hard against the top edge with its label over the
+  // viewpoint pill. This buys back roughly 6% a side, which is the headroom the labels need.
+  const LABEL_HEADROOM = 1.14;
+  const fitted = (dir: [number, number, number]): [number, number, number] => {
+    const d = fitDistance(box, wholeTarget, dir, fovDeg, aspect, LABEL_HEADROOM);
+    const l = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+    return [
+      wholeTarget[0] + (dir[0] / l) * d,
+      wholeTarget[1] + (dir[1] / l) * d,
+      wholeTarget[2] + (dir[2] / l) * d,
+    ];
+  };
+
   return [
     {
       id: "overview",
       label: "Overview",
       kind: "static",
-      position: [center[0], extent * 0.5 * fit, center[2] + extent * 0.6 * fit],
-      target: [center[0], 0, center[2]],
+      position: fitted([0, 0.5, 0.6]),
+      target: wholeTarget,
     },
     {
       id: "top",
       label: "Plan",
       kind: "static",
       // a hair off vertical: exactly overhead makes the orbit controls gimbal-lock
-      position: [center[0], extent * 1.1 * fit, center[2] + extent * 0.02],
-      target: [center[0], 0, center[2]],
+      position: fitted([0, 1.1, 0.02]),
+      target: wholeTarget,
     },
     {
       id: "start",

@@ -378,6 +378,13 @@ function CollapsedRail({
 }
 
 /** shown in the viewport corner: which viewpoint is active, and a hint that [ ] cycle them. */
+/** what the viewpoint pill covers at the top of the canvas, measured: `top: var(--s3)` plus the
+ *  control's own 28px + 4px of padding. It is chrome over the canvas exactly as the rail and the
+ *  dock are, and it is counted as an inset for the same reason: the camera composes for the
+ *  rectangle the chrome leaves uncovered, and a corner label pushed under this pill is the same
+ *  defect as a circuit pushed under the dock. */
+export const VIEWPOINT_PILL_BAND = 44;
+
 export function ViewpointPill({
   viewpoint,
   onPrev,

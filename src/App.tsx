@@ -15,7 +15,7 @@ import type { ColorMode } from "./render/RacingLine";
 import { Scene } from "./render/Scene";
 import { buildLapTimeTable } from "./solver/lapTime";
 import { VelocitySolver } from "./solver/velocity";
-import { buildViewpoints } from "./render/viewpoints";
+import { CAMERA_FOV_DEG, buildViewpoints } from "./render/viewpoints";
 import { TRACKS } from "./tracks";
 import type { Corner } from "./assets";
 import { ColorLegend } from "./ui/ColorLegend";
@@ -25,10 +25,10 @@ import type { PlateRect } from "./ui/Landing";
 import { buildCornerRows } from "./ui/cornerRows";
 import { AppState } from "./ui/AppState";
 import { SceneBoundary } from "./ui/SceneBoundary";
-import { RAIL_COLLAPSED_W, RAIL_EXPANDED_W, SidePanel, ViewpointPill } from "./ui/SidePanel";
+import { RAIL_COLLAPSED_W, RAIL_EXPANDED_W, SidePanel, VIEWPOINT_PILL_BAND, ViewpointPill } from "./ui/SidePanel";
 import { DOCK_BODY_H, DOCK_STRIP_H, TelemetryDock } from "./ui/TelemetryDock";
 import { TOPBAR_H, TopBar } from "./ui/TopBar";
-import { ThemeProvider, useIsNarrow, useMediaQuery, usePrefersReducedMotion, useTheme } from "./ui/theme";
+import { ThemeProvider, useIsNarrow, usePrefersReducedMotion, useTheme, useViewportSize } from "./ui/theme";
 import { readUrlState, writeUrlState } from "./ui/urlState";
 import { useExpandable } from "./ui/useExpandable";
 
@@ -97,7 +97,7 @@ function Viewer() {
   const prefersReducedMotion = usePrefersReducedMotion();
   const reducedMotion = motionOverride === null ? prefersReducedMotion : !motionOverride;
   const narrow = useIsNarrow();
-  const portrait = useMediaQuery("(orientation: portrait)");
+  const viewport = useViewportSize();
   const sidePanel = useExpandable("side");
   const dock = useExpandable("dock");
 
@@ -217,6 +217,32 @@ function Viewer() {
     return buildCornerRows(assets.line, result, table, coverTable, assets.landmarks.corners);
   }, [assets, result, table, coverResult]);
 
+  // what the chrome covers, in canvas pixels. The rail is a drawer on narrow screens rather than
+  // a persistent column, so it occludes nothing there; the dock's strip is always up.
+  const railW = narrow || showLanding ? 0 : sidePanel.expanded ? RAIL_EXPANDED_W : RAIL_COLLAPSED_W;
+  const dockH = showLanding ? 0 : dock.expanded ? DOCK_STRIP_H + DOCK_BODY_H : DOCK_STRIP_H;
+  // while the cover is up the camera composes for the diagram plate, which is a bounded figure
+  // on the sheet rather than a backdrop behind it. The canvas is the whole window there, since
+  // the top bar is not rendered until the cover is dismissed.
+  const insets =
+    showLanding && plateRect
+      ? {
+          left: Math.max(plateRect.left, 0),
+          top: Math.max(plateRect.top, 0),
+          right: Math.max(window.innerWidth - plateRect.right, 0),
+          bottom: Math.max(window.innerHeight - plateRect.bottom, 0),
+        }
+      : { left: railW, bottom: dockH, top: VIEWPOINT_PILL_BAND, right: 0 };
+
+  // the rectangle the chrome leaves uncovered, as an aspect. This is what the whole-circuit
+  // viewpoints fit themselves to, so pinning a panel or resizing the window reframes the circuit
+  // instead of cropping it. The canvas is the window minus the top bar, which is not rendered
+  // while the cover is up.
+  const canvasH = Math.max(viewport.height - (showLanding ? 0 : TOPBAR_H), 1);
+  const visibleAspect =
+    Math.max(viewport.width - insets.left - (insets.right ?? 0), 1) /
+    Math.max(canvasH - (insets.top ?? 0) - insets.bottom, 1);
+
   const viewpoints = useMemo(
     () =>
       assets
@@ -225,12 +251,12 @@ function Viewer() {
             assets.trackLines,
             assets.landmarks.corners,
             sceneCenter(assets),
-            sceneExtent(assets),
             exaggeration,
-            portrait ? 1.7 : 1,
+            visibleAspect,
+            CAMERA_FOV_DEG,
           )
         : [],
-    [assets, exaggeration, portrait],
+    [assets, exaggeration, visibleAspect],
   );
   const viewpoint =
     viewpoints.find((v) => v.id === viewpointId) ?? viewpoints[0] ?? FALLBACK_VIEWPOINT;
@@ -343,23 +369,6 @@ function Viewer() {
   if (!assets || !result || !table) {
     return <AppState kind="loading" title={trackDef.displayName} detail="loading circuit geometry" />;
   }
-
-  // what the chrome covers, in canvas pixels. The rail is a drawer on narrow screens rather than
-  // a persistent column, so it occludes nothing there; the dock's strip is always up.
-  const railW = narrow || showLanding ? 0 : sidePanel.expanded ? RAIL_EXPANDED_W : RAIL_COLLAPSED_W;
-  const dockH = showLanding ? 0 : dock.expanded ? DOCK_STRIP_H + DOCK_BODY_H : DOCK_STRIP_H;
-  // while the cover is up the camera composes for the diagram plate, which is a bounded figure
-  // on the sheet rather than a backdrop behind it. The canvas is the whole window there, since
-  // the top bar is not rendered until the cover is dismissed.
-  const insets =
-    showLanding && plateRect
-      ? {
-          left: Math.max(plateRect.left, 0),
-          top: Math.max(plateRect.top, 0),
-          right: Math.max(window.innerWidth - plateRect.right, 0),
-          bottom: Math.max(window.innerHeight - plateRect.bottom, 0),
-        }
-      : { left: railW, bottom: dockH, top: 0, right: 0 };
 
   const elevationRangeM = elevationRange(assets);
 
@@ -534,10 +543,6 @@ function sceneCenter(assets: CircuitAssets): readonly [number, number, number] {
   return [(b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2] as const;
 }
 
-function sceneExtent(assets: CircuitAssets): number {
-  const b = bounds(assets);
-  return Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
-}
 
 function bounds(assets: CircuitAssets) {
   const p = assets.line.positionYup;
