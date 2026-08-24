@@ -45,7 +45,10 @@ const SHOTS = [
   ["monza-lesmo", "circuit=monza&view=corner:Lesmo%201&enter=1"],
   ["monza-rettifilo", "circuit=monza&view=corner:Variante%20del%20Rettifilo&enter=1"],
   ["monza-start", "circuit=monza&view=start&enter=1"],
-  ["spa-overview-light", "circuit=spa&view=overview&enter=1&theme=light"],
+  // the second rendition. It was `theme=light` here, which stopped photographing anything the
+  // moment light became the default: this shot and `spa-overview` were the same frame.
+  ["spa-overview-lamp", "circuit=spa&view=overview&enter=1&theme=dark"],
+  ["spa-chase-lamp", "circuit=spa&view=chase&enter=1&theme=dark"],
   // the instruments, which only exist when the dock is open
   ["spa-telemetry", "circuit=spa&view=chase&enter=1", { dock: true, side: true }],
   ["spa-delta", "circuit=spa&view=chase&enter=1&mu=0.95&ghost=1", { dock: true }],

@@ -10,7 +10,7 @@ import { Perf } from "r3f-perf";
 import * as THREE from "three";
 import type { CircuitAssets } from "../assets";
 import type { VelocityProfileResult } from "../solver/velocity";
-import { useTheme, useThemeTokens } from "../ui/theme";
+import { useThemeTokens } from "../ui/theme";
 import { BrakingMarkers } from "./BrakingMarkers";
 import { CameraRig } from "./CameraRig";
 import { CarMarker, type LapProgress } from "./CarMarker";
@@ -48,6 +48,15 @@ interface SceneProps {
   insets: ViewInsets;
 }
 
+// one sun vector drives the sky, the image-based lighting and the key light, so the shading and
+// the sky agree instead of being tuned against each other. High and near overhead, because a
+// figure printed into a sheet is lit like a page and not like a landscape.
+//
+// It used to fork on the theme: low and raking under the work lamp, which gave that rendition
+// long evening shadows and a sun near the horizon. That was the last of the night scene, and the
+// lamp is now an illumination level in the tokens rather than a different time of day.
+const sun: [number, number, number] = [0.35, 0.85, -0.28];
+
 export function Scene({
   assets,
   result,
@@ -68,15 +77,6 @@ export function Scene({
   insets,
 }: SceneProps) {
   const tokens = useThemeTokens();
-  const { theme } = useTheme();
-
-  // one sun vector drives the sky, the image-based lighting and the key light, so the shading
-  // and the sky agree instead of being tuned against each other. Low and raking in the dark
-  // theme, high and near-overhead in the light one.
-  const sun = useMemo<[number, number, number]>(
-    () => (theme === "dark" ? [0.6, 0.12, -0.35] : [0.35, 0.85, -0.28]),
-    [theme],
-  );
 
   const { center, extent } = useMemo(() => {
     const p = assets.line.positionYup;
@@ -120,7 +120,7 @@ export function Scene({
     >
       {/* a floor behind the dome. If SkyDome ever fails to compile or is suspended, this is
           what shows, and it is the horizon rather than the browser's default white. */}
-      <Ink printed={theme === "light"} />
+      <Ink />
       <color attach="background" args={[tokens.sceneBg]} />
       <SkyDome sun={sun} extent={extent} reducedMotion={reducedMotion} />
 
@@ -140,11 +140,11 @@ export function Scene({
           and nothing per frame. This is what makes the car's paint read as paint: three area
           lights standing in for sky, ground bounce and the sun. */}
       <Environment frames={1} resolution={128}>
-        <Lightformer form="rect" intensity={theme === "dark" ? 0.6 : 1.4} scale={[100, 100, 1]}
+        <Lightformer form="rect" intensity={1.4} scale={[100, 100, 1]}
           position={[0, 60, 0]} rotation={[-Math.PI / 2, 0, 0]} color={tokens.lightHemiSky} />
         <Lightformer form="rect" intensity={0.35} scale={[100, 100, 1]}
           position={[0, -40, 0]} rotation={[Math.PI / 2, 0, 0]} color={tokens.lightHemiGround} />
-        <Lightformer form="circle" intensity={theme === "dark" ? 2.0 : 3.2} scale={[24, 24, 1]}
+        <Lightformer form="circle" intensity={3.2} scale={[24, 24, 1]} color={tokens.lightKeyTint}
           position={[sun[0] * 0.1, sun[1] * 0.1, sun[2] * 0.1]} target={[0, 0, 0]} />
       </Environment>
 
@@ -154,6 +154,7 @@ export function Scene({
       <directionalLight
         position={[center[0] + sun[0] * 900, sun[1] * 900, center[2] + sun[2] * 900]}
         intensity={tokens.lightKey}
+        color={tokens.lightKeyTint}
       />
       {/* rim fill from the opposite side so the car and the kerbs keep an edge against the
           background rather than going flat where the key light does not reach */}
@@ -251,25 +252,27 @@ export function Scene({
 }
 
 /**
- * tone mapping, decided by which sheet is being read.
+ * no tone mapping, in either rendition.
  *
- * The top sheet is *printed*, and print has no highlight roll-off: ink either covers the paper or
- * it does not. ACES was pulling the paper white (#fbfaf7, at 0.98) down to roughly #d8d5d2, which
- * is why the sky above the diagram block rendered as a dead grey slab rather than as the page it
+ * The sheet is *printed*, and print has no highlight roll-off: ink either covers the paper or it
+ * does not. ACES was pulling the paper white (#fbfaf7, at 0.98) down to roughly #d8d5d2, which is
+ * why the sky above the diagram block rendered as a dead grey slab rather than as the page it
  * sits on. NoToneMapping keeps paper at paper.
  *
- * The work-lamp sheet keeps ACES, because a lamp *is* an HDR light source and the roll-off is
- * doing real work there.
+ * This used to fork: the work-lamp rendition kept ACES on the argument that a lamp is an HDR
+ * light source. That argument belonged to a night scene. The lamp rendition is now the same
+ * printed page at 57% illumination, so its sky is paper too, and ACES would grey it out in
+ * exactly the way it greyed out the daylight one.
  *
- * This has to be an effect rather than Canvas's onCreated, which runs once and cannot follow the
- * theme toggle.
+ * This stays an effect rather than Canvas's onCreated, which runs once. Nothing switches it now,
+ * but a renderer recreated on context loss has to be told again.
  */
-function Ink({ printed }: { printed: boolean }) {
+function Ink() {
   const gl = useThree((s) => s.gl);
   useEffect(() => {
-    gl.toneMapping = printed ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-    gl.toneMappingExposure = printed ? 1 : 1.05;
-  }, [gl, printed]);
+    gl.toneMapping = THREE.NoToneMapping;
+    gl.toneMappingExposure = 1;
+  }, [gl]);
   return null;
 }
 

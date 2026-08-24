@@ -4,7 +4,7 @@ Working state for the interface rebuild. Written to survive a new session, since
 does not. Read this and `PRODUCT.md` first; `docs/DESIGN_NOTES.md` holds the physics and the
 23-entry assumptions register, which this work does not touch.
 
-Last updated 2026-08-21.
+Last updated 2026-08-24.
 
 ## Where things stand
 
@@ -13,9 +13,10 @@ over a canary duplicate, a printed process-blue grid, ballpoint ink, red and blu
 annotation. Five of the six tasks that built it are done: the token layer, the chrome as ruled
 sheet, the landing, the printed 3D scene, and the verification pass.
 
-The finish reviewer then returned **disposition: rebuild**, scoped to the landing. Everything
-below is the open list. The rebuild is committed as of 2026-08-21, in three commits on `main`
-starting at 454ec08, so `git log` now carries it.
+The finish reviewer then returned **disposition: rebuild**, scoped to the landing. The rebuild is
+committed as of 2026-08-21, in three commits on `main` starting at 454ec08, so `git log` carries
+it. **Seven of the eight items below are now closed.** Only item 8 is open, and it is waiting on
+a fresh finish review rather than on any code.
 
 What the reviewer said to keep, unchanged: the phase palette and its reasoning, the zero-radius
 square cut, and the rail's column-head-and-rule structure, as "the only places the run plan is
@@ -46,16 +47,47 @@ genuinely the world rather than a label on it".
    platform controls leaking into the world; so was the `<details>` marker, which is now drawn and
    rotates on open. The error surface is a sheet on the binder with the cover's own masthead and
    double rule. Behaviour untouched, and `verify-p0.mjs` still passes the error path.
-6. **Derive the dark rendition as stock under a lamp,** not leather grain.
+6. ~~Derive the dark rendition as stock under a lamp, not leather grain.~~ **Done, and it is a
+   derivation rather than a palette.** The dark block is now the light block's own values run
+   through one transform, stated in `theme.ts` and re-run against the shipped values by
+   `src/ui/theme.test.ts` so it cannot quietly drift back into two hand-tuned themes:
+
+       linear_rgb * t * [1.10, 1.00, 0.74]
+
+   The vector is the lamp's chromaticity, normalised to luminance 1 so it tints without dimming.
+   `t` is the illumination: 0.57 on the sheet, which lands paper at L* 79 instead of 98, and
+   0.022 for `bg`, the binder out on the desk where the lamp does not reach.
+
+   Three consequences that are the actual work, not side effects:
+
+   - **The sheet stays paper and the ink stays dark.** This is not an inverted interface and not
+     a low-luminance mode. That was a real choice with a real cost, taken because the toggle has
+     always said "read under the work lamp" and every other call in this rebuild took the
+     literal reading over the UI convention.
+   - **The night scene is gone.** It was the leather. The sun no longer drops to a low raking
+     angle, the terrain field no longer blends additively as a star field with its own
+     `ADDITIVE_FOG` path, the sky has no disc and no stars, and ACES no longer switches on. The
+     plate is a printed figure in both renditions, so `Scene.tsx` and `TerrainMesh.tsx` lost
+     every `theme === "dark"` branch they had.
+   - **The key light needed its own token.** `lightKeyTint` is white in daylight, which looks
+     redundant until you dim every reflectance in the scene and leave three.js's default white
+     key behind it: the road then renders brighter than the sheet it is printed on. That is what
+     the first lamp capture showed, and it is why the token exists.
+
+   Contrast was the one place physics had to be overruled. WCAG's flare term is a fixed +0.05, so
+   dimming costs contrast that correctness cannot give back. Every pair lands within 0.2 of its
+   daylight counterpart except `textDim` (4.13:1) and `phaseCoast` (2.88:1), which are darkened
+   by hand and marked at their token. Both directions are pinned by the test.
 7. ~~Fix the ghost delta sign inversion.~~ **Done.** One exported `deltaToGhost(car, ghost)`
    in `solver/lapTime.ts`, used by all four sites, pinned by a test. Note that the critique
    prescribed `ghost - car` *and* "negative = quicker", which cannot both hold; the convention
    kept is **car minus ghost, negative is quicker**, because that is what a delta bar shows a
    driver and what a time variance channel shows an engineer. DeltaTrace's 46px gutter now
    carries ticks, a zero and the key; the rail's lap time carries its provenance.
-8. **Write DESIGN.md from the rebuilt world.** Blocked on 1 to 7 and on a fresh finish review
-   returning something other than rebuild. It is recorded from the built artifact, not from
-   intentions, so it cannot be written under a rebuild disposition.
+8. **Write DESIGN.md from the rebuilt world.** The only open item. 1 to 7 are done, so what is
+   left is a fresh finish review returning something other than rebuild. DESIGN.md is recorded
+   from the built artifact rather than from intentions, so it cannot be written while a rebuild
+   disposition stands.
 
 ## Closed, and why it matters
 
@@ -98,5 +130,13 @@ reviewer's other findings do not depend on the 3D region and stand.
     node scripts/verify-p0.mjs
     npm run shots
 
-All green as of the last run. `verify-p0.mjs` captures 8 frames at 1600x900, 1440x900, 1024x700
-and 390x844, plus the error card, and its shots now reflect what a person sees.
+All green as of the last run: 192 tests, 70 of them the theme derivation. `verify-p0.mjs` captures
+9 frames at 1600x900, 1440x900, 1024x700 and 390x844, plus the error card, and its shots now
+reflect what a person sees. Both harnesses photograph the work-lamp rendition:
+`lamp-both-pinned` in `shots-p0`, `spa-overview-lamp` and `spa-chase-lamp` in `shots`. The old
+`spa-overview-light` was removed because it stopped photographing anything the moment light
+became the default.
+
+**One harness noise to ignore.** The first case of every run logs two 404s. It is a race against
+`vite preview` starting up, not the page: a fully warmed load with a `response` listener attached
+reports nothing above 400. It appears on whichever case runs first, in either theme.

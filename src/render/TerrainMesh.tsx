@@ -1,4 +1,4 @@
-// landscape context as a glowing point-and-wire field that recedes to nothing.
+// landscape context as a stippled point-and-wire field that recedes to nothing.
 //
 // Three layers, and **the visible two no longer live on the heightfield's grid**:
 //
@@ -7,7 +7,7 @@
 //      through its own hills and the far side of the lap hangs in front of the near side. Its
 //      rectangle was never visible, and its geometry backs the road clearance guarantee.
 //   2. a wireframe over the inner lattice, dim, gone before its own boundary.
-//   3. dots over the whole field, bright, coloured by elevation.
+//   3. dots over the whole field, coloured by elevation.
 //
 // Layers 2 and 3 are built by ./terrainGrid's buildFieldLayout: a circular lattice around the
 // circuit that dissolves into scatter rings further out. They used to sit on the heightfield's
@@ -37,7 +37,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Terrain } from "../assets";
-import { useTheme, useThemeTokens } from "../ui/theme";
+import { useThemeTokens } from "../ui/theme";
 import { hexToLinearRgb } from "./colorspace";
 import {
   DROP_BELOW_ROAD,
@@ -88,13 +88,14 @@ float grazeFade( vec3 worldPos ) {
 }
 `;
 
-// three's <fog_fragment> does mix(rgb, fogColor, f). That is right for an opaque surface and
-// wrong for an additive one: mixing a non-black fog colour into an additive sprite makes the
-// distant field *brighter*, not hazier. An additive layer has to fade toward nothing, so under
-// ADDITIVE_FOG the fog attenuates alpha instead of tinting rgb.
+// three's <fog_fragment> does mix(rgb, fogColor, f), which is right for an opaque surface: these
+// layers blend normally onto a paper-coloured sky, so hazing them toward the fog colour is what
+// distance looks like.
 //
-// This is coupled to the blending mode below. Flip the dark theme to NormalBlending without
-// removing the define and distant dots go transparent instead of hazy.
+// There was an ADDITIVE_FOG path here for the dark theme, which attenuated alpha instead of
+// tinting rgb, because mixing a non-black fog colour into an additive sprite makes the distant
+// field *brighter* rather than hazier. Both renditions blend normally now, so it is gone. Bring
+// it back with the blending mode or not at all: the two are one decision.
 const FOG_CHUNK = /* glsl */ `
 #ifdef USE_FOG
   #ifdef FOG_EXP2
@@ -102,11 +103,7 @@ const FOG_CHUNK = /* glsl */ `
   #else
     float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
   #endif
-  #ifdef ADDITIVE_FOG
-    gl_FragColor.a *= ( 1.0 - fogFactor );
-  #else
-    gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
-  #endif
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
 #endif
 `;
 
@@ -271,8 +268,6 @@ interface TerrainMeshProps {
 
 export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: TerrainMeshProps) {
   const tokens = useThemeTokens();
-  const { theme } = useTheme();
-  const dark = theme === "dark";
 
   const rampColor = useMemo(() => {
     const lo: [number, number, number] = [0, 0, 0];
@@ -460,14 +455,17 @@ export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: Te
           uMotion: { value: reducedMotion ? 0 : 1 },
           uFadeStart: { value: radii.fadeStart },
           uFadeEnd: { value: radii.fadeEnd },
-          // 0.22 against the old 0.09. At 9% the field was static to the eye, which is what
-          // "the animation is not working" meant.
-          uTwinkle: { value: dark ? 0.22 : 0.12 },
-          uSize: { value: dark ? 2.4 : 2.0 },
-          uFarGrow: { value: dark ? 1.8 : 1.4 },
-          uSharpNear: { value: dark ? 3.2 : 3.6 },
-          uSharpFar: { value: dark ? 1.4 : 1.6 },
-          uOpacity: { value: dark ? 0.95 : 0.6 },
+          // these used to fork on the theme, and the dark half of the fork was a star field:
+          // brighter, larger, twinklier dots blended additively onto a night sky. Both renditions
+          // are printed sheets now, so there is one set of values and it is the printed one. A
+          // page does not twinkle, but 0 is worse: at zero the field reads as a static screen
+          // rather than as stippling, so the shimmer stays, faint.
+          uTwinkle: { value: 0.12 },
+          uSize: { value: 2.0 },
+          uFarGrow: { value: 1.4 },
+          uSharpNear: { value: 3.6 },
+          uSharpFar: { value: 1.6 },
+          uOpacity: { value: 0.6 },
           uPixelRatio: { value: 1 },
         },
       ]),
@@ -477,8 +475,7 @@ export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: Te
       transparent: true,
       depthWrite: false,
       toneMapped: false,
-      blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
-      defines: dark ? { ADDITIVE_FOG: "" } : {},
+      blending: THREE.NormalBlending,
     });
     // UniformsUtils.merge deep-clones, so the anchor has to be put back by identity or the
     // material animates around a copy
@@ -493,15 +490,14 @@ export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: Te
           ...shared(),
           uFadeStart: { value: radii.wireFadeStart },
           uFadeEnd: { value: radii.wireFadeEnd },
-          uOpacity: { value: dark ? 0.26 : 0.32 },
+          uOpacity: { value: 0.32 },
         },
       ]),
       fog: true,
       transparent: true,
       depthWrite: false,
       toneMapped: false,
-      blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
-      defines: dark ? { ADDITIVE_FOG: "" } : {},
+      blending: THREE.NormalBlending,
     });
     wireMat.uniforms.uAnchor.value = anchor;
 
@@ -528,7 +524,7 @@ export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion }: Te
     return { dotMaterial: dot, wireMaterial: wireMat, occluderMaterial: occluder };
     // reducedMotion seeds uMotion here and is driven by the effect below, so it is not a dep
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor, radii, dark, tokens.sceneBg, tokens.sceneFog]);
+  }, [anchor, radii, tokens.sceneBg, tokens.sceneFog]);
 
   useEffect(
     () => () => {

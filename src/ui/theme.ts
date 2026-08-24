@@ -89,66 +89,105 @@ export interface ThemeTokens {
   phaseCoast: string;
   // scene lighting, tuned per theme so the circuit stays the brightest thing on screen
   lightKey: number;
+  /** the key light's colour, and the one place the lamp is a light rather than a surface. It is
+   *  white in daylight, so this token looks redundant there; it is not. Leaving the key at
+   *  three.js's default white while every reflectance in the scene was dimmed is what made the
+   *  road under the lamp brighter than the sheet it is printed on. */
+  lightKeyTint: string;
   lightHemiSky: string;
   lightHemiGround: string;
   lightHemi: number;
 }
 
 export const THEMES: Record<ThemeName, ThemeTokens> = {
-  // the run book read under a work lamp: the desk in shadow, warm paper, pencil that has gone
-  // amber. Deliberately not near-black with a neon accent, which is the chrome this redesign
-  // exists to leave; every value here is warm because a lamp is warm.
+  // the same stock, under a work lamp. **This rendition is derived from `light`, not designed
+  // beside it**, which is why the two blocks agree token for token: the sheet does not turn
+  // brown at night, it is the same paper reflecting less light.
+  //
+  // The transform, applied to every reflectance below and reproducible from the light values:
+  //
+  //     linear_rgb * t * [1.10, 1.00, 0.74]
+  //
+  // The vector is the lamp's chromaticity, partly adapted to, normalised to luminance 1 so it
+  // tints without dimming. `t` is the illumination: **0.57 inside the cone**, which lands the
+  // sheet at L* 79 instead of 98, and **0.022 for `bg`**, the binder out on the desk where the
+  // lamp does not reach. Nothing here is a separate palette; change a light value and this one
+  // follows.
+  //
+  // Two consequences worth stating, because they look like mistakes and are not:
+  //
+  //   1. **Ink stays dark.** Paper under a lamp is still the brightest thing in the frame, so
+  //      this is not an inverted interface, and it is not "dark mode" in the low-luminance
+  //      sense. The toggle says "read under the work lamp" because that is the whole claim.
+  //   2. **The printed grid still reads cool.** Blue ink under tungsten loses most of its
+  //      excitation, but the paper loses it too, so the b* gap between grid and sheet survives
+  //      the transform almost exactly (-10.8 daylight, -10.8 lamp). The eye adapts to the sheet
+  //      it is reading, not to D65.
+  //
+  // Contrast is the one place physics had to be overruled. WCAG's flare term is a fixed +0.05,
+  // so dimming the illumination costs contrast that no amount of correctness gives back. Every
+  // pair lands within 0.2 of its daylight counterpart except two, which are darkened by hand and
+  // marked below.
   dark: {
-    bg: "#16130f",
-    panel: "#201c16",
-    panelRaised: "#2a251d",
-    line: "#3a342a",
-    lineStrong: "#554d40",
-    text: "#f2ece0", // 14.3:1 on panel
-    textMuted: "#b8ac96", // 7.4:1 on panel
-    textDim: "#948976", // 4.7:1 on panel
-    accent: "#e8603f", // 5.0:1 on panel
-    accentDim: "#3a2119",
-    accentOn: "#f0876a",
-    accentContrast: "#16130f",
-    pos: "#6fb0e0",
-    neg: "#e8603f",
-    sceneBg: "#16130f",
-    sceneFog: "#221d16",
-    asphalt: "#4a443a",
-    edge: "#efe8db",
-    gridCell: "#1d1913",
-    gridSection: "#2b251c",
-    // contour tints, not a landscape: the diagram block is printed, so elevation reads as ranked
-    // ink weights rather than as grass and rock
-    terrainLo: "#2e3a44",
-    terrainMid: "#44505c",
-    terrainHi: "#5f6c78",
-    terrainGlow: 0.9,
-    skyZenith: "#16130f",
-    skySun: "#3a2f22",
-    skySunIntensity: 0.12,
-    skyHorizonSharp: 0.5,
+    bg: "#222018", // the binder, at 2.2% of the lamp
+    panel: "#ccc3a8",
+    panelRaised: "#c6bc9e", // the canary duplicate, still yellow: b* 16.5 against the sheet's 14.7
+    line: "#969890",
+    lineStrong: "#202221",
+    text: "#101110", // 10.8:1 on panel
+    textMuted: "#3e403f", // 5.9:1 on panel
+    textDim: "#50504f", // 4.6:1 on panel. Darkened by hand from #565755, which fell to 4.13:1
+    accent: "#a20a1c", // red pencil, 4.6:1 on panel
+    accentDim: "#c9aa98",
+    accentOn: "#730612",
+    accentContrast: "#ccc3a8",
+    pos: "#144769", // blue pencil, 5.6:1 on panel
+    neg: "#a20a1c",
+    sceneBg: "#ccc3a8",
+    sceneFog: "#ccc3a8",
+    asphalt: "#6f7681",
+    edge: "#101110",
+    gridCell: "#bcb193",
+    gridSection: "#a8a698",
+    // the diagram block is printed in both renditions, so these are the light theme's contour
+    // tints under the same lamp rather than a landscape that has turned to night
+    terrainLo: "#b2b1a0",
+    terrainMid: "#929791",
+    terrainHi: "#6a7475",
+    terrainGlow: 0.8,
+    // there is no night sky here any more. The plate is a figure printed into a sheet, so the
+    // dome is the sheet's own colour, there is no sun disc, and stars on a printed page were the
+    // clearest thing left saying "3D scene" rather than "drawing".
+    skyZenith: "#ccc3a8",
+    skySun: "#ccc3a8",
+    skySunIntensity: 0,
+    skyHorizonSharp: 1,
     skyStars: 0,
-    fogDensityK: 0.62,
-    apronLip: "#4f4941",
-    apronGravel: "#453e33",
-    apronGrass: "#33352b",
-    carBody: "#e8603f",
-    carCarbon: "#241f19",
-    carGlass: "#3a3931",
+    fogDensityK: 0.13,
+    // reflectances, not renditions: the aprons and the paint are lit by the scene's own lights,
+    // and those carry the lamp. Dimming these as well would dim the figure twice.
+    apronLip: "#e6e2d8",
+    apronGravel: "#ddd6c6",
+    apronGrass: "#dfe4d8",
+    carBody: "#c8102e",
+    carCarbon: "#3a4048",
+    carGlass: "#aebccd",
     // red and blue pencil, the two colours actually on an engineer's sheet. Red against blue
     // survives all three common colour-vision deficiencies where red against green does not, and
-    // the pair is separated on lightness as well (roughly 51 against 35 in L*) so the hue is
-    // never doing the work alone. The donated discipline goes further: phase is also carried by
-    // stroke weight, so a monochrome print of this screen still reads.
-    phaseAccel: "#6fb0e0",
-    phaseBrake: "#e8603f",
-    phaseCoast: "#948976",
-    lightKey: 1.35,
-    lightHemiSky: "#2b2519",
-    lightHemiGround: "#14110d",
-    lightHemi: 0.9,
+    // the pair is separated on lightness as well (L* 39 against 28 under the lamp, 51 against 35
+    // in daylight) so the hue is never doing the work alone. The donated discipline goes further:
+    // phase is also carried by stroke weight, so a monochrome print of this screen still reads.
+    phaseAccel: "#246085", // 3.9:1 on panel, a channel rather than text
+    phaseBrake: "#880a19", // 5.7:1 on panel
+    phaseCoast: "#6b6b64", // 3.1:1, recedes. Darkened by hand from #6f6f67, which fell to 2.88:1
+    // the intensities are the light theme's, unchanged. The lamp lives in the colours, so the
+    // figure under it is the daylight figure at 57%, which is what reading the same page in a
+    // darker room actually does.
+    lightKey: 1.55,
+    lightKeyTint: "#cfc7ae",
+    lightHemiSky: "#cfc7ae",
+    lightHemiGround: "#aea387",
+    lightHemi: 1.6,
   },
   // the white top sheet, in daylight. This is the primary rendition and the default: the physical
   // scene is an engineer at a laptop reading something they would otherwise read on paper, and
@@ -198,6 +237,7 @@ export const THEMES: Record<ThemeName, ThemeTokens> = {
     phaseBrake: "#a8102a", // 7.4:1 on paper, L* 35
     phaseCoast: "#8a9099", // 3.1:1 on paper, recedes
     lightKey: 1.55,
+    lightKeyTint: "#ffffff",
     lightHemiSky: "#ffffff",
     lightHemiGround: "#d6d2c7",
     lightHemi: 1.6,
@@ -283,6 +323,7 @@ const CSS_VAR: Record<keyof ThemeTokens, string> = {
   phaseBrake: "--phase-brake",
   phaseCoast: "--phase-coast",
   lightKey: "--light-key",
+  lightKeyTint: "--light-key-tint",
   lightHemiSky: "--light-hemi-sky",
   lightHemiGround: "--light-hemi-ground",
   lightHemi: "--light-hemi",

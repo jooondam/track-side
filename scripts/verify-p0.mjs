@@ -25,6 +25,9 @@ const CASES = [
   ["plan-both-pinned", { width: 1440, height: 900 }, "circuit=spa&view=top&enter=1", { dock: true, side: true }],
   ["chase-both-pinned", { width: 1440, height: 900 }, "circuit=spa&view=chase&enter=1", { dock: true, side: true }],
   ["mobile-dock", { width: 390, height: 844 }, "circuit=spa&view=overview&enter=1", { dock: true }],
+  // the work-lamp rendition, at the modal review size. It is derived from the light one rather
+  // than designed beside it (src/ui/theme.ts), so this frame is the check on that derivation.
+  ["lamp-both-pinned", { width: 1440, height: 900 }, "circuit=spa&view=overview&enter=1&theme=dark", { dock: true, side: true }],
   // the error path: a circuit that does not exist. The dev/preview server answers with
   // index.html at 200, which is exactly the case that used to surface as a parser message.
   ["error-no-such-circuit", { width: 1440, height: 900 }, "circuit=nope&enter=1", {}, { expectError: true }],
