@@ -9,7 +9,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import type { Viewpoint } from "./viewpoints";
+import { fitDistance, type Viewpoint } from "./viewpoints";
 
 const PAN_ACCEL = 900; // m/s^2, so panning eases in rather than snapping to full speed
 const PAN_MAX = 260; // m/s at 1x
@@ -48,6 +48,8 @@ interface CameraRigProps {
   reducedMotion: boolean;
   center: readonly [number, number, number];
   extent: number;
+  /** the racing line's bounding box, for the orbit's own fit. See the note at the orbit. */
+  fitCorners: readonly (readonly [number, number, number])[];
   carPoseRef: React.MutableRefObject<{ position: THREE.Vector3; direction: THREE.Vector3 }>;
   onUserTakeover?: () => void;
 }
@@ -58,6 +60,7 @@ export function CameraRig({
   reducedMotion,
   center,
   extent,
+  fitCorners,
   carPoseRef,
   onUserTakeover,
 }: CameraRigProps) {
@@ -173,16 +176,36 @@ export function CameraRig({
     if (orbiting) {
       if (!reducedMotion) orbitAngle.current += delta * 0.045;
       const a = orbitAngle.current;
-      // framed for the sheet's diagram plate, not for the window. The plate is a band a few
-      // hundred pixels tall, and ViewOffset has already told the camera to compose inside it, so
-      // the only job left here is standing at a distance that fills it: at the old extent * 0.8
-      // the circuit was a small drawing in a large field of empty terrain.
+      // framed for the sheet's diagram plate, not for the window, and **the distance is solved
+      // rather than chosen**. ViewOffset has already told the camera to compose inside the plate;
+      // the job here is standing where the circuit fills it.
+      //
+      // This used to be a hand-tuned `extent * 0.55`, tuned against the desktop plate, which is a
+      // wide short band at about 2.9:1. The plate on a phone is nearly square at about 1.04:1,
+      // where the same distance has far less horizontal field to work with, and the circuit ran
+      // off both edges. It is the same defect the static viewpoints had, in the one path that did
+      // not go through them.
+      //
+      // camera.aspect is the plate's aspect, not the canvas's, because ViewOffset re-asserts it
+      // every frame. So the fit reads it live and follows the plate through a resize or a scroll
+      // with nothing plumbed.
       //
       // The look-at used to be pushed sideways by extent * 0.28, to keep the circuit clear of
       // hero copy that ran across it. Nothing runs across it now. The figure is centred in its
       // own frame, which is what a figure does.
-      const r = extent * 0.55;
-      camera.position.set(center[0] + Math.cos(a) * r, extent * 0.38, center[2] + Math.sin(a) * r);
+      //
+      // Margin is tighter than the viewer's, because the plate draws no corner labels and so
+      // needs none of the headroom they ask for.
+      const cam = camera as THREE.PerspectiveCamera;
+      const elevation = 0.38 / 0.55; // the orbit's rise over its run, kept from the old pose
+      const dir: [number, number, number] = [Math.cos(a), elevation, Math.sin(a)];
+      const d = fitDistance(fitCorners, center, dir, cam.fov, cam.aspect, 1.06);
+      const dl = Math.hypot(dir[0], dir[1], dir[2]);
+      camera.position.set(
+        center[0] + (dir[0] / dl) * d,
+        center[1] + (dir[1] / dl) * d,
+        center[2] + (dir[2] / dl) * d,
+      );
       controls.target.set(center[0], 0, center[2]);
       controls.update();
       return;

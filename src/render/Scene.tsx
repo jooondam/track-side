@@ -17,7 +17,7 @@ import { CarMarker, type LapProgress } from "./CarMarker";
 import { CarTrail } from "./CarTrail";
 import { CornerLabels } from "./CornerLabels";
 import { ViewOffset, type ViewInsets } from "./ViewOffset";
-import { CAMERA_FOV_DEG } from "./viewpoints";
+import { CAMERA_FOV_DEG, lineBoxCorners } from "./viewpoints";
 import { Kerbs } from "./Kerbs";
 import { Landmarks } from "./Landmarks";
 import { RacingLine, type ColorMode } from "./RacingLine";
@@ -78,6 +78,7 @@ export function Scene({
   insets,
 }: SceneProps) {
   const tokens = useThemeTokens();
+  const fitCorners = useMemo(() => lineBoxCorners(assets.line, exaggeration), [assets.line, exaggeration]);
 
   const { center, extent } = useMemo(() => {
     const p = assets.line.positionYup;
@@ -247,6 +248,7 @@ export function Scene({
         reducedMotion={reducedMotion}
         center={center}
         extent={extent}
+        fitCorners={fitCorners}
         carPoseRef={carPoseRef}
         onUserTakeover={onUserTakeover}
       />
