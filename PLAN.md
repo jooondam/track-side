@@ -89,10 +89,60 @@ genuinely the world rather than a label on it".
    kept is **car minus ghost, negative is quicker**, because that is what a delta bar shows a
    driver and what a time variance channel shows an engineer. DeltaTrace's 46px gutter now
    carries ticks, a zero and the key; the rail's lap time carries its provenance.
-8. **Write DESIGN.md from the rebuilt world.** The only open item. 1 to 7 are done, so what is
-   left is a fresh finish review returning something other than rebuild. DESIGN.md is recorded
-   from the built artifact rather than from intentions, so it cannot be written while a rebuild
-   disposition stands.
+8. ~~Write DESIGN.md from the rebuilt world.~~ **Unblocked, not yet written.** The finish review
+   ran on 2026-08-24 and returned **disposition: fix**, not rebuild, which is the condition this
+   item was waiting on. Its eight material fixes are the list below; all eight are addressed and
+   committed. What is left is a second review pass on the fixed artifact, then the write-up.
+
+## The finish review of 2026-08-24, and what it cost
+
+Disposition **fix**. It passed persistence and truth outright, and named what to keep: the red
+pencil box on the primary action, the provenance line and the SOLVED, NOT DRIVEN strap, the corner
+rows as the way in, the mono/proportional split that marks machine-printed values, the zero-radius
+square cut, and the process-blue grid on the white sheet.
+
+**Before any of it could be judged, the cover had to be photographed.** Every one of the 27 frames
+in both harnesses carried `enter=1`, and `App.tsx` sets `showLanding = !initial.enter`, so the
+shipped first view had never been captured by anything. Fixed in 46815c4; `shots-p0` now carries
+nine cover frames including `-full` companions and one past the cover's own button.
+
+All eight fixes are in, across 590f8c7, c008a55, 1607ac0, a347c08 and 85c6b45:
+
+1. **The plate's field is printed on the cover** and still recedes in the viewer. Scoped that way
+   on purpose: in the viewer the radial fade is load-bearing, and `terrainGrid.ts` records the
+   rectangular plateau edge it hides as a measured defect.
+2. **The plate is ruled to the sheet's measure**, within 1.5px at five widths. Padding could not
+   do it, because padding on a transparent element is still transparent, so the margins are real
+   paper and the plate is the window between them.
+3. **The camera fits the circuit to whatever rectangle is live.** There was no fitting logic to
+   repair: the poses were a fixed multiple of the circuit's extent with one scalar that was 1.7 in
+   portrait and 1 everywhere else.
+4. **Declined, on measurement.** The review read PLAN.md's pre-correction numbers as the shipped
+   ones. See item 6 above: the build is 4.59:1 and 3.05:1, asserted for both renditions.
+5. **The cover's orbit fits its plate too.** It was the one camera path that never went through the
+   viewpoints, standing at a hand-tuned distance fitted by eye to the desktop plate.
+6. **The strap breaks between fields.** The collision it reported is not real: measured 8px of rule
+   clearance at 390, 360 and 320. The bad wrap was real and is fixed.
+7. **One mu.** U+00B5, which Archivo's latin subset covers, against U+03BC which no subset covers.
+   Measured at 565 differing pixels against a control of 0.
+8. **The cover's second solve sits on the canary**, which is what the duplicate already means
+   everywhere else in the product.
+
+**Two findings the review did not make, both turned up by working on the ones it did.** The
+viewpoint pill was never counted as an inset, so corner labels could be pushed under it exactly as
+the circuit was pushed under the dock. And `--neg` on the canary is 4.27:1 under the lamp, which
+the rail's ghost delta readout has been shipping since the canary was bound. Both fixed, both
+pinned.
+
+**One finding was declined with reasons, and should be expected back.** The review read the plate's
+field being cooler than the paper as a defect. The sheet is printed in process blue: `line` against
+`panel` is a b-r gap of +27, and the same pass praised that grid as correct. The field now sits at
++15 against the paper's -4, between bare stock and the printed grid. Matching the paper's
+temperature would make it graphite on a sheet that is not printed in graphite.
+
+**Known, unfiled, not fixed.** `mobile-dock.png` has a header collision in the telemetry strip at
+390px: the readout wraps and overlaps the TELEMETRY label. The review mentioned it as context but
+never filed it as a material fix, so it stayed outside this batch.
 
 ## Closed, and why it matters
 
@@ -135,8 +185,8 @@ reviewer's other findings do not depend on the 3D region and stand.
     node scripts/verify-p0.mjs
     npm run shots
 
-All green as of the last run: 192 tests, 70 of them the theme derivation. `verify-p0.mjs` captures
-9 frames at 1600x900, 1440x900, 1024x700 and 390x844, plus the error card, and its shots now
+All green as of the last run: 206 tests, 77 of them the theme derivation and 6 the camera fit. `verify-p0.mjs` captures
+13 frames at 1600x900, 1440x900, 1024x700 and 390x844, plus the error card, and its shots now
 reflect what a person sees. Both harnesses photograph the work-lamp rendition:
 `lamp-both-pinned` in `shots-p0`, `spa-overview-lamp` and `spa-chase-lamp` in `shots`. The old
 `spa-overview-light` was removed because it stopped photographing anything the moment light
