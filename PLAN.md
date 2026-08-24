@@ -76,8 +76,13 @@ genuinely the world rather than a label on it".
 
    Contrast was the one place physics had to be overruled. WCAG's flare term is a fixed +0.05, so
    dimming costs contrast that correctness cannot give back. Every pair lands within 0.2 of its
-   daylight counterpart except `textDim` (4.13:1) and `phaseCoast` (2.88:1), which are darkened
-   by hand and marked at their token. Both directions are pinned by the test.
+   daylight counterpart. Two fell under their floor when derived and were darkened by hand until
+   they cleared it, so **the shipped values pass**: `textDim` is 4.59:1 on panel, corrected up
+   from the 4.13:1 the raw transform gave, and `phaseCoast` is 3.05:1, corrected up from 2.88:1.
+   The floors are asserted for both renditions in `src/ui/theme.test.ts`, which also pins the
+   corrections as darkenings only. An earlier draft of this paragraph quoted the pre-correction
+   numbers in a way that read as the shipped ones, and a finish reviewer duly filed it as an
+   accessibility defect; the numbers above are the ones in the build.
 7. ~~Fix the ghost delta sign inversion.~~ **Done.** One exported `deltaToGhost(car, ghost)`
    in `solver/lapTime.ts`, used by all four sites, pinned by a test. Note that the critique
    prescribed `ghost - car` *and* "negative = quicker", which cannot both hold; the convention

@@ -43,6 +43,25 @@ export const Panel = forwardRef<
   );
 });
 
+/**
+ * the grip symbol, and it is deliberately U+00B5 MICRO SIGN rather than U+03BC GREEK SMALL
+ * LETTER MU.
+ *
+ * They are the same mark to the eye and indistinguishable in a diff, but not to the font.
+ * Archivo ships three subsets, latin, latin-ext and vietnamese; the latin one declares
+ * U+0000-00FF, which covers the micro sign, and **no subset covers U+03BC**. Measured rather
+ * than assumed: drawn at 120px in the app's own font stack, the two characters differ by 565
+ * pixels, with 0 for the same character drawn twice. So the Greek one was being set in the
+ * system face on the cover and on every entered screen, one glyph out of family in an interface
+ * whose reader counts a single visible inconsistency for more than a polished surface.
+ *
+ * Import it rather than typing either character, so the wrong one cannot come back invisibly.
+ *
+ * Still keep it out of anything CSS uppercases: U+00B5 uppercases to U+039C exactly as U+03BC
+ * does, and prints as a Latin M.
+ */
+export const MU = "\u00b5";
+
 /** a printed rule. `weight` is the ink: hairline for the grid, strong for a column head. */
 export function Rule({ weight = "hair" }: { weight?: "hair" | "strong" }) {
   return (
@@ -116,7 +135,7 @@ export function Field({
   note,
   tone,
 }: {
-  /** Set in uppercase by CSS, so keep Greek out of it: \u03bc uppercases to \u039c, which reads as a
+  /** Set in uppercase by CSS, so keep it out: MU uppercases to \u039c, which reads as a
    *  Latin M. "vs ghost \u03bc1.20" printed as "VS GHOST M1.20". Grip belongs in `note`. */
   label: string;
   value: string;
@@ -396,7 +415,7 @@ export function Stat({
   note,
   size = "md",
 }: {
-  /** Set in uppercase by CSS, so keep Greek out of it: \u03bc uppercases to \u039c, which reads as a
+  /** Set in uppercase by CSS, so keep it out: MU uppercases to \u039c, which reads as a
    *  Latin M. "vs ghost \u03bc1.20" printed as "VS GHOST M1.20". Grip belongs in `note`. */
   label: string;
   value: string;

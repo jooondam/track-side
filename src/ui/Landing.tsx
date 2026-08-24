@@ -21,7 +21,7 @@
 // number an engineer can check rather than as a sentence.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, formatDeltaS } from "./primitives";
+import { Button, MU, formatDeltaS } from "./primitives";
 import { formatLapTime } from "./TopBar";
 import type { CornerRow } from "./cornerRows";
 import type { Corner } from "../assets";
@@ -162,8 +162,17 @@ export function Landing({
             }}
           >
             <span style={{ fontWeight: 700, color: "var(--text)" }}>track-side</span>
-            <span>
-              Run plan · {circuitName} · solved, not driven
+            {/* the strap is three fields of one stamped head, and at 390px it has to wrap. It may
+                wrap *between* fields and never inside one: the phrase that was splitting is
+                "solved, not driven", which is the sheet's single most load-bearing qualifier and
+                reads as an unfinished sentence when it breaks after the comma. Each field is
+                nowrap and the separators are their own items, so a break lands in a gap. */}
+            <span style={{ display: "flex", flexWrap: "wrap", gap: "0 0.5em", justifyContent: "flex-end" }}>
+              <span style={{ whiteSpace: "nowrap" }}>Run plan</span>
+              <span aria-hidden="true">·</span>
+              <span style={{ whiteSpace: "nowrap" }}>{circuitName}</span>
+              <span aria-hidden="true">·</span>
+              <span style={{ whiteSpace: "nowrap" }}>solved, not driven</span>
             </span>
           </div>
 
@@ -274,19 +283,40 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
         </div>
       </div>
 
-      {/* the diagram plate. This band is deliberately transparent: the canvas behind the sheet
-          shows through it, and the camera has been told to compose the circuit inside exactly
-          this rectangle, so the figure is framed rather than cropped. Rules above and below,
-          caption underneath, the way a figure sits in a document. */}
-      <div
-        ref={plateRef}
-        aria-hidden="true"
-        style={{
-          height: "clamp(220px, 40vh, 400px)",
-          borderTop: RULE_STRONG,
-          borderBottom: RULE,
-        }}
-      />
+      {/* the diagram plate. The plate itself is deliberately transparent: the canvas behind the
+          sheet shows through it, and the camera composes the circuit inside exactly this
+          rectangle, so the figure is framed rather than cropped.
+ 
+          **It is ruled to the sheet's own measure, and that is the point.** It used to run the
+          full width, 0 to 1440 against every rule on the page at 200 to 1240, which made it a
+          band the sheet was interrupted by rather than a figure printed into it: the paper
+          appeared to stop and start again underneath. The measure cannot be held by padding here,
+          because padding on a transparent element is still transparent and would have shown the
+          canvas through the margin. So the margins are real paper, laid either side, and the
+          plate is the window between them.
+ 
+          The flex basis carries the same box as `column`: 1040 at desktop widths, shrinking to
+          the viewport minus a 20px margin at 390, which is exactly where the rules land. Borders
+          on all four sides now, heavy above in the sheet's own hierarchy. */}
+      <div style={{ display: "flex", alignItems: "stretch" }}>
+        <div className="ts-paper" style={{ flex: "1 1 0", minWidth: "clamp(20px, 4vw, 56px)" }} />
+        <div
+          ref={plateRef}
+          aria-hidden="true"
+          // a stable hook for the review harness, which measures this rectangle at every
+          // viewport. It was finding the plate by structure and broke the moment the plate
+          // gained a wrapper; the plate's identity is not its depth in the tree.
+          data-plate=""
+          style={{
+            flex: "0 1 1040px",
+            boxSizing: "border-box",
+            height: "clamp(220px, 40vh, 400px)",
+            border: RULE,
+            borderTop: RULE_STRONG,
+          }}
+        />
+        <div className="ts-paper" style={{ flex: "1 1 0", minWidth: "clamp(20px, 4vw, 56px)" }} />
+      </div>
 
       <div className="ts-paper">
         <div style={column}>
@@ -345,9 +375,9 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
               }}
             >
               <caption className="sr-only">
-                Each named corner: minimum speed and time in the corner at grip μ{mu.toFixed(2)},
+                Each named corner: minimum speed and time in the corner at grip {MU}{mu.toFixed(2)},
                 and in the margin the same corner against a second solve at grip
-                μ{compareMu.toFixed(2)}, where negative means the μ{mu.toFixed(2)} solve is
+                {MU}{compareMu.toFixed(2)}, where negative means the {MU}{mu.toFixed(2)} solve is
                 quicker. Activating a row opens the circuit at that corner.
               </caption>
               <thead>
@@ -380,8 +410,8 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {/* no Greek in an uppercased head: μ uppercases to Μ and prints as a
-                        Latin M. The grip is named in words here and in μ in the note below. */}
+                    {/* no mu in an uppercased head: it uppercases to \u039c and prints as a
+                        Latin M. The grip is named in words here and as MU in the note below. */}
                     vs grip {compareMu.toFixed(2)}{" "}
                     <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>s</span>
                   </th>
@@ -436,8 +466,8 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                 maxWidth: "72ch",
               }}
             >
-              The margin is this circuit solved a second time at grip μ{compareMu.toFixed(2)}, on
-              this page, just now. Negative means the μ{mu.toFixed(2)} solve is quicker through
+              The margin is this circuit solved a second time at grip {MU}{compareMu.toFixed(2)}, on
+              this page, just now. Negative means the {MU}{mu.toFixed(2)} solve is quicker through
               that corner, so the column is what {(mu - compareMu).toFixed(2)} of grip is worth,
               corner by corner. It is also why the slider inside is not a playback speed.
             </p>

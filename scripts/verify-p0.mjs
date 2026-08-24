@@ -174,7 +174,7 @@ async function main() {
 
       if (opts.landing && !opts.thenEnter) {
         const sheet = page.locator(".ts-sheet");
-        const plateAt = () => page.locator("figure, .ts-sheet > div[aria-hidden=true]").first().boundingBox();
+        const plateAt = () => page.locator("[data-plate]").first().boundingBox();
         const short = await plateAt();
         // growing the viewport saturates the cover's vh clamps, which makes the sheet *taller*
         // than the height just measured, so one pass leaves the footer cut off. Two passes are

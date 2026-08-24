@@ -2,7 +2,7 @@
 // expanded it is five labelled groups. Replaces the old single 250px box that carried eight
 // ungrouped rows of buttons and never got out of the way of the circuit.
 
-import { Button, ButtonGroup, Check, IconButton, Panel, RaisedSheet, Section, Select, Slider, Stat, formatDeltaS } from "./primitives";
+import { Button, ButtonGroup, Check, IconButton, MU, Panel, RaisedSheet, Section, Select, Slider, Stat, formatDeltaS } from "./primitives";
 import { TOPBAR_H, formatLapTime } from "./TopBar";
 import type { Expandable } from "./useExpandable";
 import type { ColorMode } from "../render/RacingLine";
@@ -134,7 +134,7 @@ export function SidePanel(props: SidePanelProps) {
             }
           >
             <Slider
-              label="grip μ"
+              label={`grip ${MU}`}
               value={props.mu}
               min={0.6}
               max={1.4}
@@ -158,7 +158,7 @@ export function SidePanel(props: SidePanelProps) {
               label="lap time"
               value={formatLapTime(props.lapTimeS)}
               size="lg"
-              note={`solved for a GT3 model at \u03bc${props.mu.toFixed(2)}, not measured`}
+              note={`solved for a GT3 model at ${MU}${props.mu.toFixed(2)}, not measured`}
             />
             {ghostDelta !== null && (
               <RaisedSheet>
@@ -168,7 +168,7 @@ export function SidePanel(props: SidePanelProps) {
                   delta={formatDeltaS(ghostDelta)}
                   deltaTone={ghostDelta <= 0 ? "pos" : "neg"}
                   size="sm"
-                  note={"reference grip \u03bc1.20, negative is quicker"}
+                  note={`reference grip ${MU}1.20, negative is quicker`}
                 />
               </RaisedSheet>
             )}
@@ -246,7 +246,7 @@ export function SidePanel(props: SidePanelProps) {
             <RaisedSheet>
               <Check
                 label="Ghost car"
-                note="a second solve at the reference grip, μ1.20"
+                note={`a second solve at the reference grip, ${MU}1.20`}
                 checked={props.ghostEnabled}
                 onChange={props.onGhostEnabledChange}
               />
@@ -334,7 +334,7 @@ function CollapsedRail({
     <div style={{ position: "relative", height: "100%" }}>
       <div style={cell}>
         {/* no uppercase transform here: it turns the mu into a capital Mu, which reads as "M" */}
-        <div style={{ ...cap, textTransform: "none" }}>grip μ</div>
+        <div style={{ ...cap, textTransform: "none" }}>grip {MU}</div>
         <div className="tnum" style={{ fontSize: 15, color: "var(--accent)", fontWeight: 600 }}>
           {mu.toFixed(2)}
         </div>
