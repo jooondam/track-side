@@ -4,7 +4,7 @@ Working state for the interface rebuild. Written to survive a new session, since
 does not. Read this and `PRODUCT.md` first; `docs/DESIGN_NOTES.md` holds the physics and the
 23-entry assumptions register, which this work does not touch.
 
-Last updated 2026-08-24.
+Last updated 2026-08-25.
 
 ## Where things stand
 
@@ -94,6 +94,11 @@ genuinely the world rather than a label on it".
    item was waiting on. Its eight material fixes are the list below; all eight are addressed and
    committed. What is left is a second review pass on the fixed artifact, then the write-up.
 
+   **Note for that pass:** two further rounds landed on 2026-08-25, after the eight fixes and
+   before any review saw them. See "Work since the review" below. The artifact has moved
+   substantially, so DESIGN.md must be written from the current build rather than from the state
+   the 2026-08-24 review described.
+
 ## The finish review of 2026-08-24, and what it cost
 
 Disposition **fix**. It passed persistence and truth outright, and named what to keep: the red
@@ -140,9 +145,73 @@ field being cooler than the paper as a defect. The sheet is printed in process b
 +15 against the paper's -4, between bare stock and the printed grid. Matching the paper's
 temperature would make it graphite on a sheet that is not printed in graphite.
 
-**Known, unfiled, not fixed.** `mobile-dock.png` has a header collision in the telemetry strip at
-390px: the readout wraps and overlaps the TELEMETRY label. The review mentioned it as context but
-never filed it as a material fix, so it stayed outside this batch.
+~~**Known, unfiled, not fixed.** `mobile-dock.png` has a header collision in the telemetry strip at
+390px.~~ **Closed on 2026-08-25** by the density pass below. The panel's own name now gives way on
+a phone, dropped rather than clipped, because it names the container it is inside while the numbers
+beside it are the information.
+
+## Work since the review, 2026-08-25
+
+Two rounds landed after the eight fixes. Both are committed; neither has been reviewed.
+
+### The ghost car ran on its own clock (`e728f25`)
+
+The ghost and the live car drifted onto opposite sides of the circuit. Two causes, one of them a
+real bug.
+
+**The bug:** `progressRef.current.scrub` was never cleared, so it latched the last request forever
+and a ghost mounted mid-lap adopted it on its first frame, snapping to the start line while the car
+was half a lap away. **The design:** there was no central clock. Each marker owned its own playback
+and `sAtTime` wraps modulo *that solve's* lap time, so two cars holding equal elapsed time wrapped
+at different periods and the quicker ghost gained a whole lap periodically.
+
+Both are fixed by hoisting the clock. `LapClock` in `Scene.tsx` is the only thing that advances the
+lap; both markers read it and ask their own table where that puts them. Because it wraps on the
+live car's lap time the two get a **rolling start**: the gap is one lap's grip cost and never more.
+
+Three things fell out rather than needing their own fixes: the mount bug died with the marker's own
+`sRef`, the scrub-id handshake is deleted, and the lossy per-frame `s -> t -> s` round trip is
+gone. The ghost's table was also being built twice from one solve.
+
+The gap is now legible: a dashed leader along the racing line labelled with the delta, a second
+quieter marker on the timeline, and the separation in metres. **Seconds and metres are labelled
+apart on purpose** — the seconds are `liveDeltaToGhost`, distance-aligned and the same helper the
+rail and dock use; the metres are `gapMetres`, the instantaneous separation. As an unlabelled pair
+they would read as two answers to one question.
+
+`lapClock.test.ts` pins the regression directly: across 20,000 simulated frames the shared clock
+holds the gap under a lap's worth of road while the old independent-clock arithmetic reaches the far
+side of the circuit.
+
+### The viewer was sparse and decorated at once (`f06ac12`)
+
+A density and ornament pass, taken **inside** the world rather than against it, because
+`index.html:59-73` refuses near-black telemetry chrome by name and the review's keep-list stands.
+Measured before: ~85,000 px per number at rest, ten type sizes, seven letterspacings, a third of the
+rail in section furniture.
+
+- **A closed type scale.** Four sizes, all already in use, published as `TYPE` and read by the DOM
+  *and* the canvases. That closes a claim that was not true: `primitives.tsx` has said 12 is the
+  smallest type in the interface for as long as it has existed, but the four charts drew at 9 and
+  10. `type.test.ts` walks the source and fails on any numeric `fontSize`, hardcoded `ctx.font`
+  shorthand or `letterSpacing` literal.
+- **Captions became live channels.** Each chart printed a caption naming the chart it was already
+  inside; each now prints its channel and its value at the shared cursor. This is the MoTeC i2 and
+  ATLAS pattern, and the charts already shared a cursor and an x axis, so it completes a pattern
+  rather than importing one.
+- **The delta row is not mounted without a ghost.** 64 of the dock's 284px printed one sentence in
+  the default state; they go back to the scene through the inset path.
+- **Dead vocabulary deleted**: `Field` and its leader-dot ornament, `Divider`, `Stat.trend` and its
+  three marks, `Stat`'s `md` and `xl`, `SPACE.s6`. None rendered. This matters because DESIGN.md is
+  recorded from the built artifact, and documenting the leader-dot row would document an ornament
+  that has never shipped.
+
+Section chrome went from 45px head-to-body to 35px across six sections, with the head and the rule
+untouched because the review named them load-bearing. **No colour changed**, so `theme.test.ts`'s
+lamp derivation and contrast floors pass unmodified; that was the deliberate tripwire.
+
+**One inventory error worth recording.** `variant="quiet"` was reported unused and is not: the
+landing's secondary action uses it. Caught by the compiler, restored, not deleted.
 
 ## Closed, and why it matters
 
@@ -185,7 +254,7 @@ reviewer's other findings do not depend on the 3D region and stand.
     node scripts/verify-p0.mjs
     npm run shots
 
-All green as of the last run: 206 tests, 77 of them the theme derivation and 6 the camera fit. `verify-p0.mjs` captures
+All green as of the last run: 225 tests. `verify-p0.mjs` captures
 13 frames at 1600x900, 1440x900, 1024x700 and 390x844, plus the error card, and its shots now
 reflect what a person sees. Both harnesses photograph the work-lamp rendition:
 `lamp-both-pinned` in `shots-p0`, `spa-overview-lamp` and `spa-chase-lamp` in `shots`. The old
