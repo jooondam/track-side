@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-25T00:00:00Z",
+  "title": "Design System: track-side",
+  "extensions": {
+    "colorMeta": {
+      "paper": { "role": "neutral", "displayName": "Bond Paper", "canonical": "#fbfaf7", "note": "The top sheet, and the surface every contrast ratio is specified against. Deliberately not cream. Under the lamp: #ccc3a8.", "tonalRamp": ["#26251f", "#3d3b32", "#565246", "#716c5d", "#8e8877", "#aeaa9b", "#d0cdc2", "#fbfaf7"] },
+      "canary": { "role": "neutral", "displayName": "Canary Duplicate", "canonical": "#f4f1e8", "note": "The second solve, and nothing else. Under the lamp: #c6bc9e, still yellow (b* 16.5 against the sheet's 14.7).", "tonalRamp": ["#26241c", "#3c392e", "#545044", "#6f6a5a", "#8d8774", "#aca691", "#cfcab6", "#f4f1e8"] },
+      "binder": { "role": "neutral", "displayName": "Manila Binder", "canonical": "#d6d2c7", "note": "What the sheets lie on, and the colour every scrim is made from at 92%. Under the lamp: #222018, the desk outside the cone.", "tonalRamp": ["#21201b", "#36342c", "#4c493e", "#646052", "#7e7967", "#9a947e", "#b8b2a1", "#d6d2c7"] },
+      "printed-grid": { "role": "neutral", "displayName": "Printed Grid, Process Blue", "canonical": "#b9c4d4", "note": "The stock itself, at a 22px pitch under the type on the cover's paper blocks. Also --line, the hairline rule. Under the lamp: #969890, and the b* gap to the sheet survives the transform almost exactly (-10.8 in both).", "tonalRamp": ["#1c2129", "#2e3540", "#424b59", "#586374", "#717d90", "#8c98aa", "#a4aec2", "#b9c4d4"] },
+      "rule-strong": { "role": "neutral", "displayName": "Column Head Rule", "canonical": "#2a2f36", "note": "2px ink: a column head, a sheet's top edge, a key cap's box.", "tonalRamp": ["#0b0d0f", "#15181b", "#20242a", "#2a2f36", "#4a525d", "#6d7783", "#99a1ab", "#c9ced4"] },
+      "ink": { "role": "neutral", "displayName": "Ballpoint Ink", "canonical": "#16191d", "note": "Primary text, 17.3:1 on paper. Also the fill of an inverted (pressed) control.", "tonalRamp": ["#16191d", "#24282e", "#343941", "#474d57", "#5d646f", "#78808c", "#9aa1ac", "#c3c8cf"] },
+      "ink-muted": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#4e5560", "note": "Labels and section heads, 7.2:1 on paper. Also the substitute for --text-dim on the canary sheet.", "tonalRamp": ["#14161a", "#212429", "#2f343b", "#3e444d", "#4e5560", "#6d7684", "#9199a5", "#bcc1c9"] },
+      "ink-dim": { "role": "neutral", "displayName": "Dim Ink", "canonical": "#6b7280", "note": "Notes and provenance, 4.59:1 on paper. Lighter than a conventional dim tone because it is exactly as light as AA allows and no lighter. Fails on the canary (4.28:1), which is why CANARY rebinds it.", "tonalRamp": ["#16181b", "#23262b", "#32363d", "#434851", "#565c67", "#6b7280", "#98a0ac", "#c6cbd3"] },
+      "red-pencil": { "role": "primary", "displayName": "Red Pencil", "canonical": "#c8102e", "note": "The accent, 5.7:1 on paper. Focus ring, slider thumb, brand lozenge, row hover at 9%. Also --neg.", "tonalRamp": ["#2b0309", "#450510", "#630818", "#830b20", "#a30d27", "#c8102e", "#e5455d", "#f59aa8"] },
+      "red-pencil-deep": { "role": "primary", "displayName": "Deep Red Pencil", "canonical": "#8f0b20", "note": "The foreground drawn on the red-pencil-wash toggle fill, because the accent itself fails 4.5:1 there in both renditions. Also --neg on the canary sheet (8.31 / 6.29).", "tonalRamp": ["#1f0207", "#33040c", "#4a0511", "#620717", "#78091c", "#8f0b20", "#c2213c", "#e57b8c"] },
+      "red-pencil-wash": { "role": "primary", "displayName": "Pencil Wash", "canonical": "#f7dbe0", "note": "The background of an active toggle. Never carries the accent as its own foreground.", "tonalRamp": ["#2d1418", "#472026", "#622d35", "#7f3d47", "#9e535d", "#bd7780", "#dba7ae", "#f7dbe0"] },
+      "blue-pencil": { "role": "secondary", "displayName": "Blue Pencil", "canonical": "#1b5e9c", "note": "--pos, 6.5:1 on paper. The second annotation colour: a delta that is quicker.", "tonalRamp": ["#061523", "#0a2239", "#0f3252", "#14446e", "#1b5e9c", "#2a7fcc", "#66a8e0", "#b3d3f0"] },
+      "phase-accel": { "role": "tertiary", "displayName": "Accelerating, Blue Pencil", "canonical": "#2f7dc4", "note": "4.2:1 on paper, L* 51. A channel rather than text. Under the lamp: #246085, L* 39.", "tonalRamp": ["#0a1c2c", "#102c46", "#173f63", "#1f5484", "#276aa5", "#2f7dc4", "#6ba5d9", "#aecdec"] },
+      "phase-brake": { "role": "tertiary", "displayName": "Braking, Red Pencil", "canonical": "#a8102a", "note": "7.4:1 on paper, L* 35. Under the lamp: #880a19, L* 28.", "tonalRamp": ["#240309", "#3a050e", "#530715", "#6e0a1c", "#8a0d23", "#a8102a", "#d43a53", "#ec8f9d"] },
+      "phase-coast": { "role": "tertiary", "displayName": "Coasting, Graphite", "canonical": "#8a9099", "note": "3.05:1 on paper, low chroma so it recedes, leaving the line as two active phases separated by gaps rather than three competing bands. Its lamp counterpart was darkened by hand from #6f6f67 (2.88:1) to #6b6b64.", "tonalRamp": ["#1b1d20", "#2a2d31", "#3c4045", "#50555b", "#666c73", "#7d848c", "#8a9099", "#c2c6cb"] }
+    },
+    "typographyMeta": {
+      "hero": { "displayName": "Hero", "purpose": "The lap time in the title block, and nothing else. The answer the whole tool exists to produce." },
+      "figure": { "displayName": "Figure", "purpose": "A number that anchors a section: the grip readout, Stat size=lg, the error card's heading." },
+      "value": { "displayName": "Value", "purpose": "A number read at a glance, and the cover's body prose at max 46ch." },
+      "label": { "displayName": "Label", "purpose": "Uppercase column heads, field labels, notes and provenance. The interface's 12px floor, now true of the canvas charts as well as the DOM." }
+    },
+    "shadows": [],
+    "shadowStrategy": "No shadows at any elevation in either rendition; nothing in the build declares a box-shadow. Depth is tonal (panel over panelRaised over bg) and ruled (1px --line hairline, 2px --line-strong column head). Modals are laid down as sheets on the binder, not lifted.",
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "easeOutQuint, the only easing in the system. Most of the travel happens early, so a panel settles into place rather than decelerating into it. One eased tween also owns every camera change (CameraRig.tsx)." },
+      { "name": "fast", "value": "140ms", "purpose": "Control state: background, colour and border-colour on buttons, icon buttons and the disclosure marker." },
+      { "name": "base", "value": "300ms", "purpose": "Panel open and close. At 240ms the rail arrived before the eye had followed it, which read as a jump rather than a slide." },
+      { "name": "slow", "value": "800ms", "purpose": "Long scene transitions." },
+      { "name": "reduced-motion", "value": "animation-duration: 0.01ms !important; transition-duration: 0.01ms !important", "purpose": "Global honouring of prefers-reduced-motion, plus usePrefersReducedMotion for the scene." }
+    ],
+    "breakpoints": [
+      { "name": "narrow", "value": "760px", "purpose": "The only structural breakpoint. Below it the side rail cannot coexist with a usable viewport and becomes a drawer over it. Everything else re-fits fluidly via useViewportSize, because the camera solves against the rectangle the chrome leaves uncovered." }
+    ],
+    "layout": {
+      "column": "1040px max width, centred, clamp(20px, 4vw, 56px) gutters (cover sheet)",
+      "printedGrid": "22px square, two 1px color-mix gradients at 42% of --line, offset -1px, on cover paper blocks only",
+      "railCollapsed": "68px",
+      "railExpanded": "280px",
+      "dockStrip": "34px",
+      "modal": "520px, max calc(100vw - 32px)"
+    }
+  },
+  "components": [
+    {
+      "name": "Button, default",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "The unpressed cell on a sheet: a square box in a hairline rule, muted ink, no fill.",
+      "html": "<button class=\"ds-btn\">overview</button>",
+      "css": ".ds-btn { min-height: 28px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: transparent; color: #4e5560; border: 1px solid #b9c4d4; border-radius: 0; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0; white-space: nowrap; transition: background 140ms cubic-bezier(0.22,1,0.36,1), color 140ms cubic-bezier(0.22,1,0.36,1), border-color 140ms cubic-bezier(0.22,1,0.36,1); } .ds-btn:hover { color: #16191d; border-color: #2a2f36; } .ds-btn:focus-visible { outline: 2px solid #c8102e; outline-offset: 2px; }"
+    },
+    {
+      "name": "Button, pressed toggle",
+      "kind": "button",
+      "refersTo": "button-default-active",
+      "description": "A chosen cell is inked in, not tinted. The inversion is the state, so it survives a monochrome print and a dichromat reader. Emits aria-pressed.",
+      "html": "<button class=\"ds-btn-on\" aria-pressed=\"true\">phase</button>",
+      "css": ".ds-btn-on { min-height: 28px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; background: #16191d; color: #fbfaf7; border: 1px solid #16191d; border-radius: 0; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; font-size: 12px; font-weight: 700; white-space: nowrap; transition: background 140ms cubic-bezier(0.22,1,0.36,1), color 140ms cubic-bezier(0.22,1,0.36,1); } .ds-btn-on:focus-visible { outline: 2px solid #c8102e; outline-offset: 2px; }"
+    },
+    {
+      "name": "Button, primary",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The cover sheet's one call to action. 40px tall; 24px is the WCAG 2.2 minimum and primaries get 40.",
+      "html": "<button class=\"ds-btn-primary\">Open the circuit</button>",
+      "css": ".ds-btn-primary { min-height: 40px; padding: 0 24px; display: inline-flex; align-items: center; justify-content: center; background: #16191d; color: #fbfaf7; border: 1px solid #16191d; border-radius: 0; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; font-size: 15px; font-weight: 700; white-space: nowrap; transition: background 140ms cubic-bezier(0.22,1,0.36,1); } .ds-btn-primary:hover { background: #2a2f36; } .ds-btn-primary:focus-visible { outline: 2px solid #c8102e; outline-offset: 2px; }"
+    },
+    {
+      "name": "Segmented group",
+      "kind": "chip",
+      "refersTo": "button-default",
+      "description": "Mutually exclusive choices as printed boxes butted against each other, sharing one rule. This is the radio; Check is the checkbox.",
+      "html": "<div class=\"ds-group\" role=\"group\" aria-label=\"Colour mode\"><button class=\"ds-group-cell ds-on\" aria-pressed=\"true\">phase</button><button class=\"ds-group-cell\" aria-pressed=\"false\">speed</button><button class=\"ds-group-cell\" aria-pressed=\"false\">plain</button></div>",
+      "css": ".ds-group { display: flex; gap: 0; flex-wrap: wrap; margin-left: -1px; } .ds-group-cell { min-height: 28px; padding: 0 12px; margin-left: -1px; background: transparent; color: #4e5560; border: 1px solid #b9c4d4; border-radius: 0; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: background 140ms cubic-bezier(0.22,1,0.36,1), color 140ms cubic-bezier(0.22,1,0.36,1); } .ds-group-cell:hover { color: #16191d; } .ds-group-cell.ds-on { background: #16191d; color: #fbfaf7; border-color: #16191d; font-weight: 700; } .ds-group-cell:focus-visible { outline: 2px solid #c8102e; outline-offset: 2px; }"
+    },
+    {
+      "name": "Select, ruled field",
+      "kind": "input",
+      "refersTo": "select-field",
+      "description": "A box on the sheet with the caret this world draws rather than the one the platform draws. appearance:none is the whole point; the option list itself is the OS's and is the honest boundary of the fix.",
+      "html": "<span class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-circuit\">Circuit</label><span class=\"ds-field-box\"><select class=\"ds-select\" id=\"ds-circuit\"><option>Spa-Francorchamps</option><option>Monza</option></select><span class=\"ds-caret\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M4.5 6.5L8 10l3.5-3.5\"/></svg></span></span></span>",
+      "css": ".ds-field { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; } .ds-field-label { font-size: 12px; color: #4e5560; } .ds-field-box { display: inline-flex; align-items: center; } .ds-select { appearance: none; -webkit-appearance: none; min-height: 28px; max-width: 240px; padding: 0 26px 0 8px; background: transparent; border: 1px solid #b9c4d4; border-radius: 0; color: #16191d; font-family: inherit; font-size: 15px; font-weight: 500; } .ds-select:focus-visible { outline: 2px solid #c8102e; outline-offset: 2px; } .ds-caret { margin-left: -22px; pointer-events: none; color: #4e5560; display: flex; }"
+    },
+    {
+      "name": "Check",
+      "kind": "input",
+      "refersTo": "button-default",
+      "description": "An independent boolean as a ticked box on a form. It never fills its whole row, so a section with three things switched on does not read as three alarms.",
+      "html": "<label class=\"ds-check\"><input type=\"checkbox\" checked><span class=\"ds-check-body\"><span>Ghost lap</span><span class=\"ds-check-note\">a second solve at a lower grip</span></span></label>",
+      "css": ".ds-check { display: flex; align-items: flex-start; gap: 8px; min-height: 24px; cursor: pointer; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; font-size: 12px; color: #16191d; } .ds-check input { width: 14px; height: 14px; margin-top: 2px; accent-color: #16191d; flex-shrink: 0; } .ds-check-body { display: flex; flex-direction: column; gap: 1px; } .ds-check-note { font-size: 12px; color: #6b7280; } .ds-check input:focus-visible { outline: 2px solid #c8102e; outline-offset: 2px; }"
+    },
+    {
+      "name": "Section, column head",
+      "kind": "custom",
+      "refersTo": "section-head",
+      "description": "The run plan's grouping device and the replacement for the card: uppercase label, a 2px rule under it, then the rows. Named by the first finish review as one of only three places where the run plan is genuinely the world rather than a label on it.",
+      "html": "<section class=\"ds-section\"><h2 class=\"ds-section-head\">Solve</h2><div class=\"ds-section-rule\"></div><div class=\"ds-section-body\"><div class=\"ds-row\"><span>Grip</span><span class=\"ds-num\">1.45</span></div><div class=\"ds-hair\"></div><div class=\"ds-row\"><span>Lap</span><span class=\"ds-num\">2:16.84</span></div></div></section>",
+      "css": ".ds-section { padding: 8px 12px; background: #fbfaf7; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; } .ds-section-head { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4e5560; } .ds-section-rule { height: 2px; background: #2a2f36; margin: 3px 0 8px; } .ds-section-body { display: flex; flex-direction: column; gap: 8px; } .ds-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: #4e5560; } .ds-hair { height: 1px; background: #b9c4d4; } .ds-num { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 500; color: #16191d; }"
+    },
+    {
+      "name": "Stat",
+      "kind": "custom",
+      "refersTo": "section-head",
+      "description": "Label above, tabular value below, with unit, signed delta and provenance note. Structurally makes provenance the default: a bare figure has to be a deliberate omission.",
+      "html": "<div class=\"ds-stat\"><div class=\"ds-stat-label\">Lap time</div><div class=\"ds-stat-line\"><span class=\"ds-stat-value\">2:16.84<span class=\"ds-stat-unit\"> s</span></span><span class=\"ds-stat-delta\">−0.42 s</span></div><div class=\"ds-stat-note\">Modelled from an estimated g-g-v, not a measured lap.</div></div>",
+      "css": ".ds-stat { font-family: 'Archivo Variable', ui-sans-serif, sans-serif; } .ds-stat-label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #4e5560; } .ds-stat-line { display: flex; align-items: baseline; gap: 8px; } .ds-stat-value { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 500; line-height: 1.15; color: #16191d; } .ds-stat-unit { font-size: 12px; font-weight: 400; color: #4e5560; } .ds-stat-delta { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; color: #1b5e9c; } .ds-stat-note { font-size: 12px; color: #6b7280; margin-top: 2px; }"
+    },
+    {
+      "name": "Canary sheet",
+      "kind": "card",
+      "refersTo": "canary-sheet",
+      "description": "The second-solve surface. A surface rather than a component, so a panel or one column of a table can sit on it. Rebinds --text-dim to the muted tone and --neg to the deep pencil, both because the measured ratios on this paper fail AA otherwise.",
+      "html": "<div class=\"ds-canary\"><div class=\"ds-canary-label\">Ghost, grip 1.20</div><div class=\"ds-canary-value\">2:19.11</div><div class=\"ds-canary-note\">a second solve on this page</div></div>",
+      "css": ".ds-canary { background: #f4f1e8; border: 1px solid #b9c4d4; border-radius: 0; padding: 12px; display: grid; gap: 12px; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; } .ds-canary-label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #4e5560; } .ds-canary-value { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 500; color: #16191d; } .ds-canary-note { font-size: 12px; color: #4e5560; }"
+    },
+    {
+      "name": "Sheet dialog",
+      "kind": "custom",
+      "refersTo": "canary-sheet",
+      "description": "Every modal in the build: a sheet laid on the binder. 2px top rule, lozenge masthead, second 2px rule, 1px bottom rule, no side borders, square cut. The scrim is the binder's own colour at 92%, never black: what recedes is not dimmed, it is covered.",
+      "html": "<div class=\"ds-scrim\"><div class=\"ds-sheet\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Keyboard\"><div class=\"ds-sheet-head\"><span class=\"ds-mark\"><svg width=\"10\" height=\"10\" viewBox=\"0 0 16 16\" fill=\"currentColor\"><path d=\"M8 1l5 7-5 7-5-7z\"/></svg></span><span class=\"ds-sheet-name\">track-side</span><span class=\"ds-sheet-spacer\"></span><button class=\"ds-btn-close\">close</button></div><div class=\"ds-sheet-rule\"></div><p class=\"ds-sheet-body\">Every view is a link. Copy the address to reproduce this frame.</p></div></div>",
+      "css": ".ds-scrim { position: relative; display: flex; align-items: center; justify-content: center; padding: 32px; background: color-mix(in srgb, #d6d2c7 92%, transparent); } .ds-sheet { width: 520px; max-width: calc(100% - 32px); padding: 24px; background: #fbfaf7; border: none; border-top: 2px solid #2a2f36; border-bottom: 1px solid #b9c4d4; border-radius: 0; font-family: 'Archivo Variable', ui-sans-serif, sans-serif; } .ds-sheet-head { display: flex; align-items: center; gap: 8px; } .ds-mark { color: #c8102e; display: flex; } .ds-sheet-name { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #6b7280; } .ds-sheet-spacer { flex: 1; } .ds-btn-close { min-height: 28px; padding: 0 12px; background: transparent; color: #4e5560; border: 1px solid #b9c4d4; border-radius: 0; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; } .ds-btn-close:hover { color: #16191d; border-color: #2a2f36; } .ds-btn-close:focus-visible { outline: 2px solid #c8102e; outline-offset: 2px; } .ds-sheet-rule { height: 2px; background: #2a2f36; margin-top: 8px; } .ds-sheet-body { font-size: 15px; line-height: 1.6; color: #16191d; }"
+    },
+    {
+      "name": "Kbd",
+      "kind": "chip",
+      "refersTo": "kbd",
+      "description": "A key cap as a boxed cell in the heavier rule. Mono, square, no fill.",
+      "html": "<span>Press <kbd class=\"ds-kbd\">G</kbd> to toggle the ghost</span>",
+      "css": ".ds-kbd { display: inline-block; min-width: 18px; padding: 1px 5px; background: transparent; border: 1px solid #2a2f36; border-radius: 0; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #16191d; text-align: center; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Run Plan on NCR Carbon-Copy Stock",
+    "overview": "This interface is the working document an engineer fills in during a session, not a HUD floating over a dark scene. Every surface is a sheet of paper: a white bond top sheet (panel #fbfaf7, deliberately not cream), a canary duplicate underneath it (panelRaised #f4f1e8), and a manila binder behind both (bg #d6d2c7). The 3D circuit is not a backdrop the chrome sits on; on the cover sheet it is a bounded figure printed into the page, with a rule above it, a rule below it and a caption underneath, the way a diagram sits in a document.\n\nTwo visual anti-references are refused by name in the direction contract at index.html:55-73 and by the build: the near-black telemetry chrome this category always ships, and the cream-paper-and-serif rendition the subject would otherwise attract. What replaced them is a run plan's own vocabulary: ruled rows, column heads, boxed cells and printed leaders. There are no cards anywhere in src/ui/primitives.tsx and no rounded corners anywhere in the build.\n\nThe system is dense, monochrome-legible and load-bearing. Colour is never decoration and never the only signal: a pressed control inverts to an ink fill rather than tinting; a delta always writes its sign; the racing line's phase is carried by stroke weight as well as hue. That discipline is enforced in the primitives rather than at call sites, so it cannot be forgotten per component. WCAG 2.2 AA is binding, and the first finish review's contrast finding was answered with measured values asserted in src/ui/theme.test.ts (textDim 4.59:1, phaseCoast 3.05:1), not with a softened rule.",
+    "keyCharacteristics": [
+      "Paper is the substrate, ink is the foreground; nothing is inverted or \"dark mode\" in the low-luminance sense.",
+      "Rules and column heads instead of cards; zero radius everywhere.",
+      "Numbers set in mono, prose in proportional, and the split is load-bearing.",
+      "Two renditions, one palette: the lamp rendition is derived from daylight by a stated transform, not designed beside it.",
+      "No shadows at all. Depth is tonal sheet-on-sheet and ruled weight.",
+      "Every state that matters survives a monochrome print and all three common colour-vision deficiencies."
+    ],
+    "rules": [
+      { "name": "The One Stock Rule", "section": "colors", "body": "Nothing in src/ may contain a hex literal outside src/ui/theme.ts. The DOM reads tokens as CSS custom properties; the canvas charts and the three.js scene read the same values as plain strings through useThemeTokens, because neither can resolve var(). Real-world materials that have a colour rather than a design (tyre rubber, FIA kerbs, brake glow) live in the MATERIAL block of the same file so the rule stays a rule with no judgement calls in it." },
+      { "name": "The Derived Lamp Rule", "section": "colors", "body": "The lamp rendition is not a second palette. Every reflectance is the daylight value through linear_rgb * t * [1.10, 1.00, 0.74], where the vector is the lamp's chromaticity normalised to luminance 1 and t is illumination: 0.57 on the sheet, 0.022 for bg, the binder out on the desk. src/ui/theme.test.ts re-runs that transform against the shipped values, so the two blocks cannot drift into hand-tuning. Exactly two departures are permitted and both are pinned as darkenings only: textDim (from #565755, which fell to 4.13:1) and phaseCoast (from #6f6f67, 2.88:1). Contrast is the one place physics is overruled, because WCAG's flare term is a fixed +0.05 and dimming costs contrast that correctness cannot give back." },
+      { "name": "The Canary Means One Thing Rule", "section": "colors", "body": "CANARY (src/ui/primitives.tsx) is the second solve and nothing else. It appears on the ghost's readouts in the rail and on the cover's right margin column, and nowhere else. Colour is a role: the sheet you are reading tells you which solve you are reading. The surface rebinds two tokens, both measured rather than precautionary: --text-dim to the muted tone (it lands at 4.28:1 daylight / 4.26:1 lamp on canary) and --neg to red-pencil-deep (4.27:1 under the lamp, and this was a live defect on the ghost's delta readout, not a hypothetical). --pos needs no help at 5.94 / 5.19." },
+      { "name": "The Never Colour Alone Rule", "section": "colors", "body": "No state, phase or sign is carried by hue by itself. A pressed control inverts to an ink fill. A delta writes + or − (U+2212, so the minus sits at digit width in tabular figures) and prints exact zero unsigned. Phase carries stroke weight. The audit test: screenshot the surface, desaturate it, and every distinction must survive." },
+      { "name": "The Two Faces Rule", "section": "typography", "body": "Numbers are set in mono; prose and labels are set in Archivo. This split is load-bearing and carries most of the world in the app chrome, where there is no printed grid to do it. The four-size scale must not be allowed to swallow it: closing the size ramp is not permission to collapse the face distinction." },
+      { "name": "The Named Exception Rule", "section": "typography", "body": "The scale is closed, so an exception must be a named constant rather than a literal. There is exactly one in the app chrome: MASTHEAD_TRACK = \"0.14em\" in src/ui/Landing.tsx, wider than the interface's label tracking because a masthead is display type on a cover sheet read once, where a working screen wants a tracking you stop noticing. type.test.ts bans raw letterSpacing values precisely so exceptions have to say what they are." },
+      { "name": "The Micro Sign Rule", "section": "typography", "body": "The grip symbol is U+00B5 MICRO SIGN, imported as MU from primitives.tsx, never typed. Archivo's latin subset declares U+0000-00FF and covers it; no shipped subset covers U+03BC GREEK SMALL LETTER MU, so the Greek character was silently falling back to the system face, one glyph out of family. Measured, not assumed: drawn at 120px in the app's own stack the two differ by 565 pixels, against 0 for the same character twice. Keep MU out of anything CSS uppercases: it maps to U+039C and prints as a Latin M." },
+      { "name": "The Instrument Names Itself Rule", "section": "layout", "body": "Each of the four canvas charts prints its channel and its live value where a caption would otherwise name the chart, and the collapsed strip prints only what the open body does not. No instrument spends space on a title that its own axis already gives." },
+      { "name": "The Same Place on the Road Rule", "section": "layout", "body": "Every trace shares one cursor and one x axis in arc length, so a vertical line through the stack is one point on the circuit. The delta is distance-aligned in all four places it appears (deltaToGhost and liveDeltaToGhost, src/solver/lapTime.ts), under one convention pinned by test: car minus ghost, negative is quicker. Comparing two cars at the same instant compares different pieces of road." },
+      { "name": "The Binder Scrim Rule", "section": "elevation", "body": "A modal veil is the binder's own colour at near-opacity (color-mix(in srgb, var(--bg) 92%, transparent)), never black. rgba(0,0,0,0.5) greys the paper, the ink and the pencil equally, which is a lighting effect on a sheet that has no lighting. What recedes is not dimmed, it is covered." },
+      { "name": "The Printed Figure Rule", "section": "elevation", "body": "The 3D is a figure printed into a sheet wherever it is bounded by the page. TerrainMesh takes printed, true only for the cover's plate: ink weight (uInkGain 0.72), fog off, no atmospheric falloff, no twinkle, a hard bounded edge (uOpacity 0.95 against 0.6). The viewer keeps recession, and the sky dome is the sheet's own colour with no sun disc and no stars in either rendition, because stars on a printed page were the clearest thing left saying \"3D scene\" rather than \"drawing\". sceneFog has exactly three consumers that must never disagree, so fully fogged geometry lands on the same value as the sky it ends against and the terrain plate's silhouette is unfindable." },
+      { "name": "The Drawn Mark Rule", "section": "shapes", "body": "No icon is a Unicode glyph. A glyph is a character: it inherits the text face, is drawn by whatever font on the reader's machine carries that codepoint, and its size, weight and baseline are decided by a type designer solving a different problem. This build previously shipped a black-square play triangle, a fisheye pin and a trigram menu, and the pin and play mark were noticeably different weights for exactly that reason. Draw the path." },
+      { "name": "The World Draws Its Own Controls Rule", "section": "shapes", "body": "Platform-drawn marks are suppressed and redrawn in this world's hand: appearance: none on <select> with the caret drawn as an Icon, summary { list-style: none } with the disclosure triangle redrawn as .ts-marker. Left native, a select arrives with the host's radius, its own arrow weight and on macOS a blue focus ring, which is three design systems visible inside one field. The honest boundary of this fix: the option list itself is drawn by the OS and cannot be styled." },
+      { "name": "The Number Carries Its Provenance Rule", "section": "components", "body": "PRODUCT.md is explicit that absolute lap times are estimated, not measured. The cover's monumental lap time sets its qualifier directly under it (\"Modelled from an estimated g-g-v, not a measured lap\"), and Stat and Field take note so the same discipline is structural. A number this size with no qualifier is the single most misleading thing this product could print." },
+      { "name": "The Camera Composes For The Page Rule", "section": "components", "body": "src/render/viewpoints.ts fits the circuit to whatever rectangle the chrome leaves uncovered (fitDistance, closed form, pinned in viewpoints.test.ts), and on the cover it composes for the diagram plate's measured rect rather than for the window. Nothing is cropped by the plate's edges and no copy ever sits over the road." }
+    ],
+    "dos": [
+      "Do put every colour in src/ui/theme.ts and read it as a CSS custom property in the DOM or through useThemeTokens in canvas and three.js. No hex literal anywhere else in src/.",
+      "Do derive any new lamp-rendition value with linear_rgb * t * [1.10, 1.00, 0.74], t = 0.57 on the sheet and 0.022 on the binder, and add it to the POOL_KEYS list in theme.test.ts. If contrast forces a hand correction, make it a darkening and mark it in the token comment.",
+      "Do reuse the four sizes, two trackings and three weights. If a new surface genuinely needs an exception, make it a named exported constant with a comment saying what it is, like MASTHEAD_TRACK.",
+      "Do set numbers in mono with .tnum and prose in Archivo, on every new surface.",
+      "Do build groups from a label plus a 2px rule (Section), and separate rows with 1px rules.",
+      "Do express a chosen state as an ink inversion, and a signed quantity with a written + / −.",
+      "Do lay a new modal down as a sheet: 2px top rule, lozenge masthead, second 2px rule, 1px bottom rule, no side borders, square cut.",
+      "Do make the scrim color-mix(in srgb, var(--bg) 92%, transparent).",
+      "Do print an estimated number with its provenance in the same block."
+    ],
+    "donts": [
+      "Don't add a corner radius. RADIUS is 0 in all three steps and that is the form language, not a default waiting to be overridden.",
+      "Don't add a box-shadow. This system has none; use a different paper or a heavier rule.",
+      "Don't use a black scrim, or dim a surface to push it back.",
+      "Don't pair red against green for phase, or \"balance\" the phase pair to equal lightness. Both the hue axis and the L* separation are load-bearing, and the L* gap is what keeps it readable in monochrome.",
+      "Don't put the canary paper under anything that is not the second solve.",
+      "Don't use a Unicode glyph as an icon; draw the path on the 16-unit grid in Icon.tsx.",
+      "Don't ship a <select>, <summary> or focus ring at the platform's own weight.",
+      "Don't type either mu character; import MU, and keep it out of anything CSS uppercases.",
+      "Don't let a numeric fontSize, a ctx.font shorthand or a letterSpacing literal into src/ui/*.tsx; type.test.ts fails the build on all three.",
+      "Don't hardcode a chrome dimension twice. Export it once and hand the same number to CSS and to the camera inset."
+    ]
+  }
+}

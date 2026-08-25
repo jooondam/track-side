@@ -101,7 +101,7 @@ export function Section({
           style={{
             margin: 0,
             fontSize: LABEL_SIZE,
-            fontWeight: 700,
+            fontWeight: TYPE.weight.bold,
             letterSpacing: TYPE.track.label,
             textTransform: "uppercase",
             color: "var(--text-muted)",
@@ -300,11 +300,11 @@ export function Slider({
         </label>
         <span
           className="tnum"
-          style={{ fontSize: TYPE.size.figure, color: "var(--text)", fontWeight: 600, lineHeight: 1.1 }}
+          style={{ fontSize: TYPE.size.figure, color: "var(--text)", fontWeight: TYPE.weight.bold, lineHeight: 1.1 }}
         >
           {format ? format(value) : value}
           {unit && (
-            <span style={{ fontSize: LABEL_SIZE, fontWeight: 400, color: "var(--text-muted)" }}>
+            <span style={{ fontSize: LABEL_SIZE, fontWeight: TYPE.weight.regular, color: "var(--text-muted)" }}>
               {" "}
               {unit}
             </span>
@@ -383,7 +383,7 @@ export function Stat({
         >
           {value}
           {unit && (
-            <span style={{ fontSize: LABEL_SIZE, fontWeight: 400, color: "var(--text-muted)" }}>
+            <span style={{ fontSize: LABEL_SIZE, fontWeight: TYPE.weight.regular, color: "var(--text-muted)" }}>
               {" "}
               {unit}
             </span>
@@ -548,7 +548,7 @@ export function Select({
           borderRadius: 0,
           color: "var(--text)",
           fontSize: TYPE.size.value,
-          fontWeight: 500,
+          fontWeight: TYPE.weight.medium,
           width: "100%",
         }}
       >

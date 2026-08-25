@@ -65,6 +65,19 @@ describe("no type literals escape the scale", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("has no numeric fontWeight outside TYPE", () => {
+    // the scale claimed three weights and shipped four: 600 appeared as a literal at four sites,
+    // so the ramp was enforced by convention and the document that recorded it had to say so.
+    // Enforcing it is cheaper than documenting the gap.
+    const offenders: string[] = [];
+    for (const { file, text } of uiSources()) {
+      for (const m of text.matchAll(/fontWeight:\s*(\d+)/g)) {
+        offenders.push(`${file}: fontWeight: ${m[1]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("has no letterSpacing literal outside TYPE", () => {
     const offenders: string[] = [];
     for (const { file, text } of uiSources()) {

@@ -116,7 +116,7 @@ export function AppState({
         </div>
         <div style={{ height: 2, background: "var(--line-strong)", marginTop: "var(--s2)" }} />
 
-        <h1 style={{ margin: "var(--s3) 0 var(--s2)", fontSize: TYPE.size.figure, fontWeight: 600 }}>{title}</h1>
+        <h1 style={{ margin: "var(--s3) 0 var(--s2)", fontSize: TYPE.size.figure, fontWeight: TYPE.weight.bold }}>{title}</h1>
 
         <p style={{ margin: 0, fontSize: TYPE.size.label, lineHeight: 1.6, color: "var(--text-muted)" }}>
           {kind === "loading"

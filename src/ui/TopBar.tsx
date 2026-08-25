@@ -74,7 +74,7 @@ export function TopBar({
           alignItems: "baseline",
           gap: 6,
           fontSize: TYPE.size.value,
-          fontWeight: 700,
+          fontWeight: TYPE.weight.bold,
           letterSpacing: TYPE.track.label,
           whiteSpace: "nowrap",
         }}
@@ -122,7 +122,7 @@ export function TopBar({
           className="tnum"
           style={{
             fontSize: TYPE.size.hero,
-            fontWeight: 700,
+            fontWeight: TYPE.weight.bold,
             letterSpacing: "-0.02em",
             lineHeight: 1,
             color: "var(--text)",

@@ -173,7 +173,7 @@ export function Landing({
               color: "var(--text-muted)",
             }}
           >
-            <span style={{ fontWeight: 700, color: "var(--text)" }}>track-side</span>
+            <span style={{ fontWeight: TYPE.weight.bold, color: "var(--text)" }}>track-side</span>
             {/* the strap is three fields of one stamped head, and at 390px it has to wrap. It may
                 wrap *between* fields and never inside one: the phrase that was splitting is
                 "solved, not driven", which is the sheet's single most load-bearing qualifier and
@@ -257,7 +257,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                 >
                   {STEPS.map(([title, detail]) => (
                     <li key={title} style={{ paddingTop: "var(--s2)", borderTop: RULE_STRONG }}>
-                      <div style={{ fontSize: TYPE.size.label, fontWeight: 700, color: "var(--text)" }}>
+                      <div style={{ fontSize: TYPE.size.label, fontWeight: TYPE.weight.bold, color: "var(--text)" }}>
                         {title}
                       </div>
                       <div style={{ fontSize: TYPE.size.label, lineHeight: 1.5, color: "var(--text-dim)" }}>
@@ -285,7 +285,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                 style={{
                   fontSize: "clamp(46px, 8vw, 88px)",
                   lineHeight: 1.0,
-                  fontWeight: 700,
+                  fontWeight: TYPE.weight.bold,
                   letterSpacing: "-0.03em",
                   color: "var(--text)",
                 }}
@@ -376,7 +376,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                   letterSpacing: MASTHEAD_TRACK,
                   textTransform: "uppercase",
                   color: "var(--text-muted)",
-                  fontWeight: 600,
+                  fontWeight: TYPE.weight.bold,
                 }}
               >
                 Named corners
@@ -409,14 +409,14 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                     color: "var(--text-dim)",
                   }}
                 >
-                  <th scope="col" style={{ textAlign: "left", fontWeight: 500, padding: "0 0 4px" }}>
+                  <th scope="col" style={{ textAlign: "left", fontWeight: TYPE.weight.medium, padding: "0 0 4px" }}>
                     Corner
                   </th>
-                  <th scope="col" style={{ textAlign: "right", fontWeight: 500, padding: "0 0 4px" }}>
-                    v min <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>km/h</span>
+                  <th scope="col" style={{ textAlign: "right", fontWeight: TYPE.weight.medium, padding: "0 0 4px" }}>
+                    v min <span style={{ color: "var(--text-dim)", fontWeight: TYPE.weight.regular }}>km/h</span>
                   </th>
-                  <th scope="col" style={{ textAlign: "right", fontWeight: 500, padding: "0 0 4px" }}>
-                    time <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>s</span>
+                  <th scope="col" style={{ textAlign: "right", fontWeight: TYPE.weight.medium, padding: "0 0 4px" }}>
+                    time <span style={{ color: "var(--text-dim)", fontWeight: TYPE.weight.regular }}>s</span>
                   </th>
                   {/* the margin, and **it is on the canary**.
  
@@ -435,7 +435,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                     style={{
                       ...CANARY,
                       textAlign: "right",
-                      fontWeight: 500,
+                      fontWeight: TYPE.weight.medium,
                       padding: "0 var(--s2) 4px var(--s4)",
                       borderLeft: RULE,
                       width: "1%",
@@ -445,7 +445,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                     {/* no mu in an uppercased head: it uppercases to \u039c and prints as a
                         Latin M. The grip is named in words here and as MU in the note below. */}
                     vs grip {compareMu.toFixed(2)}{" "}
-                    <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>s</span>
+                    <span style={{ color: "var(--text-dim)", fontWeight: TYPE.weight.regular }}>s</span>
                   </th>
                 </tr>
               </thead>

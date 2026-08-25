@@ -339,7 +339,7 @@ function CollapsedRail({
       <div style={cell}>
         {/* no uppercase transform here: it turns the mu into a capital Mu, which reads as "M" */}
         <div style={{ ...cap, textTransform: "none" }}>grip {MU}</div>
-        <div className="tnum" style={{ fontSize: TYPE.size.value, color: "var(--accent)", fontWeight: 600 }}>
+        <div className="tnum" style={{ fontSize: TYPE.size.value, color: "var(--accent)", fontWeight: TYPE.weight.bold }}>
           {mu.toFixed(2)}
         </div>
       </div>

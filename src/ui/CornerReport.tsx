@@ -47,7 +47,7 @@ export function CornerReport({
 
   const th: React.CSSProperties = {
     textAlign: "right",
-    fontWeight: 500,
+    fontWeight: TYPE.weight.medium,
     fontSize: TYPE.size.label,
     letterSpacing: TYPE.track.label,
     textTransform: "uppercase",
@@ -78,19 +78,19 @@ export function CornerReport({
               Corner
             </th>
             <th scope="col" style={th}>
-              v min <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>km/h</span>
+              v min <span style={{ color: "var(--text-dim)", fontWeight: TYPE.weight.regular }}>km/h</span>
             </th>
             <th scope="col" style={th}>
-              entry <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>km/h</span>
+              entry <span style={{ color: "var(--text-dim)", fontWeight: TYPE.weight.regular }}>km/h</span>
             </th>
             <th scope="col" style={th}>
-              exit <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>km/h</span>
+              exit <span style={{ color: "var(--text-dim)", fontWeight: TYPE.weight.regular }}>km/h</span>
             </th>
             <th scope="col" style={th}>
-              time <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>s</span>
+              time <span style={{ color: "var(--text-dim)", fontWeight: TYPE.weight.regular }}>s</span>
             </th>
             <th scope="col" style={th}>
-              delta <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>s</span>
+              delta <span style={{ color: "var(--text-dim)", fontWeight: TYPE.weight.regular }}>s</span>
             </th>
           </tr>
         </thead>
