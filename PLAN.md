@@ -89,15 +89,18 @@ genuinely the world rather than a label on it".
    kept is **car minus ghost, negative is quicker**, because that is what a delta bar shows a
    driver and what a time variance channel shows an engineer. DeltaTrace's 46px gutter now
    carries ticks, a zero and the key; the rail's lap time carries its provenance.
-8. ~~Write DESIGN.md from the rebuilt world.~~ **Unblocked, not yet written.** The finish review
-   ran on 2026-08-24 and returned **disposition: fix**, not rebuild, which is the condition this
-   item was waiting on. Its eight material fixes are the list below; all eight are addressed and
-   committed. What is left is a second review pass on the fixed artifact, then the write-up.
+8. ~~Write DESIGN.md from the rebuilt world.~~ **Done, 2026-08-25** (`fa7bd11`). Both finish
+   reviews returned **fix**; the second said plainly that DESIGN.md could be written from this
+   artifact. `DESIGN.md` and `.impeccable/design.json` are recorded from the build, naming the
+   file that holds each decision rather than restating intentions.
 
-   **Note for that pass:** two further rounds landed on 2026-08-25, after the eight fixes and
-   before any review saw them. See "Work since the review" below. The artifact has moved
-   substantially, so DESIGN.md must be written from the current build rather than from the state
-   the 2026-08-24 review described.
+   Writing it closed a divergence, which is the argument for the rule: the type scale claimed
+   three weights and shipped four, so `type.test.ts` now fails on any numeric `fontWeight` and the
+   claim is true. Two divergences are named in the document rather than smoothed over: the cover's
+   lap time is a `clamp()` display size outside the scale, and the numeric face is the reader's
+   platform mono while the display face is self-hosted.
+
+**All eight items are closed.** What remains is not a task list; see "Still open" at the end.
 
 ## The finish review of 2026-08-24, and what it cost
 
@@ -246,6 +249,20 @@ panels pinned.
 the 3D region whenever a panel was open, which is most of them. Judgements made about the
 circuit's composition from those frames deserve a second look against fresh captures. The
 reviewer's other findings do not depend on the 3D region and stand.
+
+## Still open
+
+Nothing blocking. Three threads, recorded so they are not rediscovered:
+
+1. **Self-hosting a mono face.** Every number is set in the reader's OS mono while every label is
+   self-hosted Archivo, which sits oddly against `e98ec33`, "self-host Archivo, so the interface
+   speaks in its own voice". Roughly 30 kB and its own decision. The second reviewer's warning
+   bears on it: the mono/proportional split is now carrying most of the world in the app chrome,
+   so the face doing it is not a small choice.
+2. **The 319-row harness artifact**, below. Still wants a human at `npm run dev`.
+3. **Coverage of the last review.** Its verdict covers the eight scored fixes and the three
+   regressions it looked for, not the whole surface. The help overlay and the mobile drawer have
+   frames now and were fixed after it ran, so they have never been scored.
 
 ## Verifying
 
