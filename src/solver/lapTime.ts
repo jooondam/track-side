@@ -72,3 +72,72 @@ export function sAtTime(table: LapTimeTable, sM: Float64Array, t: number): numbe
 export function deltaToGhost(carTimeS: number, ghostTimeS: number): number {
   return carTimeS - ghostTimeS;
 }
+
+/**
+ * Advance the shared lap clock by one frame.
+ *
+ * **There used to be no clock at all.** Each car marker owned its own playback, carrying arc
+ * length and reconstructing time from it every frame through its own table:
+ *
+ *     t = timeAtS(myTable, s); s = sAtTime(myTable, t + dt)
+ *
+ * That had two costs. `timeAtS` interpolates in s and `sAtTime` interpolates in t, so they are not
+ * exact inverses and the round trip accumulated error in each marker independently. And because
+ * `sAtTime` wraps modulo *its own* solve's lap time, two cars holding equal elapsed time wrapped
+ * at different periods: the quicker ghost gained a whole lap every so often and the on-track gap
+ * grew without bound. One clock, read by both, removes both problems.
+ *
+ * `lapTimeS` is the **live car's**, which is what makes this a rolling start: both cars re-zero
+ * when the car being driven crosses the line, so the gap on screen is one lap's worth of grip cost
+ * and never more. The ghost runs on past the line into a partial next lap before the reset, which
+ * is what finishing ahead looks like.
+ *
+ * The frame clamp is the one from the old per-marker loop, kept for the same reason: a tab-switch
+ * stall must not launch the car half a lap down the road.
+ */
+export const MAX_FRAME_S = 0.1;
+
+export function advanceLapClock(
+  tS: number,
+  frameDeltaS: number,
+  speedMultiplier: number,
+  lapTimeS: number,
+): number {
+  if (!(lapTimeS > 0)) return 0;
+  const next = tS + Math.min(frameDeltaS, MAX_FRAME_S) * speedMultiplier;
+  return ((next % lapTimeS) + lapTimeS) % lapTimeS;
+}
+
+/**
+ * The live delta to the ghost, **at the car's current point on the road**.
+ *
+ * Distance-aligned, not time-aligned, and that is the whole point: DeltaTrace's header puts it
+ * best, comparing two cars at the same instant compares different pieces of road. Every readout in
+ * the interface answers this same question at the same arc length, so they agree by construction.
+ *
+ * This exists because the number now appears in three places at once (the rail, the dock strip and
+ * the tether in the scene) and the last time one comparison was written out at several sites they
+ * disagreed in sign, two of them 300px apart. See deltaToGhost.
+ */
+export function liveDeltaToGhost(
+  carTable: LapTimeTable,
+  ghostTable: LapTimeTable,
+  sM: Float64Array,
+  s: number,
+): number {
+  return deltaToGhost(timeAtS(carTable, sM, s), timeAtS(ghostTable, sM, s));
+}
+
+/**
+ * Signed on-track separation in metres, the shorter way round the loop.
+ *
+ * **This is a different quantity from the delta above and must never be presented as the same
+ * one.** The delta is seconds at one point on the road; this is metres between two points at one
+ * instant. Positive means the ghost is up the road, which matches the delta's sign convention:
+ * positive is the car being behind.
+ */
+export function gapMetres(carS: number, ghostS: number, loopLengthM: number): number {
+  const raw = ghostS - carS;
+  const half = loopLengthM / 2;
+  return ((((raw + half) % loopLengthM) + loopLengthM) % loopLengthM) - half;
+}

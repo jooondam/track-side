@@ -190,7 +190,7 @@ export function SpeedTrace({
 
     const scrubTo = (f: number) => {
       const p = progressRef.current;
-      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: line.sM[indexAtFrac(f)] };
+      p.scrub = { s: line.sM[indexAtFrac(f)] };
     };
 
     const nearestCorner = (f: number): Corner | null => {

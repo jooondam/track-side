@@ -23,7 +23,7 @@ import type { Expandable } from "./useExpandable";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 import type { LapTimeTable } from "../solver/lapTime";
-import { deltaToGhost } from "../solver/lapTime";
+import { deltaToGhost, gapMetres, sAtTime } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
 import type { Corner } from "../assets";
 import { Icon } from "./Icon";
@@ -195,6 +195,7 @@ export function TelemetryDock(props: TelemetryDockProps) {
                 onScrubStart={scrubStart}
               />
               <Timeline
+                ghostTable={props.ghostTable}
                 sM={props.line.sM}
                 table={props.table}
                 width={traceWidth}
@@ -292,6 +293,7 @@ function LiveDelta({
   line: LineData;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const gapRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (!ghostTable) return;
@@ -307,6 +309,14 @@ function LiveDelta({
         ref.current.textContent = formatDeltaS(d);
         ref.current.style.color = d <= 0 ? "var(--pos)" : "var(--neg)";
       }
+      // the separation, which is a different quantity from the delta and is labelled apart from
+      // it: seconds are the comparison at one point on the road, metres are the distance between
+      // two points at one instant. Read as a pair they would look like two answers to one
+      // question.
+      if (gapRef.current) {
+        const gap = gapMetres(p.sM, sAtTime(ghostTable, line.sM, p.lapTS), line.loopLengthM);
+        gapRef.current.textContent = `${Math.abs(gap).toFixed(0)} m apart`;
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -316,7 +326,8 @@ function LiveDelta({
   if (!ghostTable) return null;
   return (
     <span style={{ color: "var(--text-dim)", fontSize: 12, letterSpacing: "0.06em" }}>
-      vs ghost <span ref={ref} className="tnum" style={{ fontSize: 12 }} />
+      vs ghost <span ref={ref} className="tnum" style={{ fontSize: 12 }} />{" "}
+      <span ref={gapRef} className="tnum" style={{ fontSize: 12, color: "var(--text-muted)" }} />
     </span>
   );
 }

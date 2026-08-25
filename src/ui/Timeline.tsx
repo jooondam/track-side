@@ -7,7 +7,7 @@
 
 import { useEffect, useRef } from "react";
 import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
-import { useThemeTokens } from "./theme";
+import { MATERIAL, useThemeTokens } from "./theme";
 import type { LapProgress } from "../render/CarMarker";
 import type { LapTimeTable } from "../solver/lapTime";
 import { sAtTime } from "../solver/lapTime";
@@ -15,6 +15,10 @@ import { sAtTime } from "../solver/lapTime";
 interface TimelineProps {
   sM: Float64Array;
   table: LapTimeTable;
+  /** the ghost's own table, when it is running. The scrubber is the one instrument that is about
+   *  time rather than distance, so it is the right place to show that the ghost is on a shorter
+   *  lap: its marker reaches the end of the bar before the car's does. */
+  ghostTable?: LapTimeTable | null;
   width: number;
   height?: number;
   progressRef: React.MutableRefObject<LapProgress>;
@@ -30,6 +34,7 @@ function mmss(t: number): string {
 export function Timeline({
   sM,
   table,
+  ghostTable,
   width,
   height = 40,
   progressRef,
@@ -59,6 +64,14 @@ export function Timeline({
       ctx.fillStyle = tokens.accentDim;
       ctx.fillRect(r.left, barY - 2, frac * r.width, 4);
 
+      // the ghost first, so the live cursor draws over it and the drag target is never obscured
+      if (ghostTable && ghostTable.lapTimeS > 0) {
+        const gFrac = ((p.lapTS % ghostTable.lapTimeS) + ghostTable.lapTimeS) % ghostTable.lapTimeS;
+        const gx = r.left + (gFrac / ghostTable.lapTimeS) * r.width;
+        ctx.fillStyle = MATERIAL.ghost;
+        ctx.fillRect(gx - 1, barY - 6, 2, 12);
+      }
+
       const x = r.left + frac * r.width;
       ctx.fillStyle = tokens.accent;
       ctx.fillRect(x - 1.5, barY - 8, 3, 16);
@@ -79,7 +92,7 @@ export function Timeline({
     const scrubAt = (clientX: number) => {
       const frac = Math.min(fracAtClientX(canvas, clientX, r), 0.9999);
       const p = progressRef.current;
-      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: sAtTime(table, sM, frac * table.lapTimeS) };
+      p.scrub = { s: sAtTime(table, sM, frac * table.lapTimeS) };
       p.tS = frac * table.lapTimeS;
     };
     const down = (e: PointerEvent) => {
@@ -104,7 +117,7 @@ export function Timeline({
       canvas.removeEventListener("pointermove", move);
       canvas.removeEventListener("pointerup", up);
     };
-  }, [sM, table, width, height, tokens, progressRef, onScrubStart]);
+  }, [sM, table, ghostTable, width, height, tokens, progressRef, onScrubStart]);
 
   return (
     <canvas

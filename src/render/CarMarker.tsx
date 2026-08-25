@@ -18,7 +18,8 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { LineData } from "../assets";
-import { buildLapTimeTable, lowerIndex, sAtTime, timeAtS } from "../solver/lapTime";
+import { lowerIndex, sAtTime, timeAtS } from "../solver/lapTime";
+import type { LapTimeTable } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
 import { PHASE_BRAKE } from "../solver/velocity";
 import { MATERIAL, useThemeTokens } from "../ui/theme";
@@ -29,16 +30,29 @@ export interface LapProgress {
   vMps: number;
   tS: number;
   lapTimeS: number;
-  // scrub request: id increments on every new request; each marker (live and ghost) applies
-  // a given id exactly once, so frame ordering between the two markers can't drop a scrub
-  scrub: { id: number; s: number } | null;
+  /** elapsed seconds into the live car's lap. The one clock both cars are drawn from: see
+   *  advanceLapClock, and LapClock in Scene.tsx which is the only thing that writes it. */
+  lapTS: number;
+  /**
+   * a request to put the lap somewhere, in metres of arc length.
+   *
+   * It used to carry an id, because two markers each ran their own playback and each had to apply
+   * a given request exactly once whatever order the frames came in. There is one consumer now, so
+   * there is no id and no handshake, and **the request is cleared once applied**. That last part
+   * was a real defect: the field was never reset, so it latched the last request forever, and a
+   * ghost mounted mid-lap adopted it on its first frame and snapped to the start line while the
+   * car was half a lap away.
+   */
+  scrub: { s: number } | null;
 }
 
 interface CarMarkerProps {
   line: LineData;
   result: VelocityProfileResult;
-  playing: boolean;
-  speedMultiplier: number;
+  /** this car's own arc-length/time mapping. Built once per solve in App and passed down, rather
+   *  than rebuilt here: the ghost's table was previously constructed twice, once for the dock and
+   *  once inside this component, from the same solve. */
+  table: LapTimeTable;
   exaggeration: number;
   ghost?: boolean;
   progressRef?: React.MutableRefObject<LapProgress>;
@@ -69,8 +83,7 @@ const MAX_PITCH_RAD = 0.5;
 export function CarMarker({
   line,
   result,
-  playing,
-  speedMultiplier,
+  table,
   exaggeration,
   ghost = false,
   progressRef,
@@ -81,8 +94,6 @@ export function CarMarker({
   const beaconRef = useRef<THREE.Mesh>(null);
   const shadowRef = useRef<THREE.Mesh>(null);
   const discRef = useRef<THREE.MeshStandardMaterial>(null);
-  const sRef = useRef(0);
-  const lastScrubId = useRef(-1);
   const rollRef = useRef(0);
   const pitchRef = useRef(0);
   const tokens = useThemeTokens();
@@ -117,14 +128,9 @@ export function CarMarker({
     [],
   );
 
-  const table = useMemo(
-    () => buildLapTimeTable(line.sM, result.vMps, result.dlM),
-    [line, result],
-  );
-
-  // scrub requests apply even while a different result is animating (table changes reset
-  // nothing: sRef survives solver updates so the car doesn't teleport on slider drags).
-  // only the live car owns the shared progress fields: the ghost must not clobber them.
+  // only the live car owns the shared progress fields: the ghost must not clobber them. The
+  // clock itself is advanced by <LapClock> in Scene.tsx, which needs this to know where the lap
+  // ends. A re-solve moves that end point, so it is published on every table change.
   useEffect(() => {
     if (progressRef && !ghost) progressRef.current.lapTimeS = table.lapTimeS;
   }, [table, progressRef, ghost]);
@@ -132,18 +138,11 @@ export function CarMarker({
   useFrame(({ camera }, delta) => {
     if (!groupRef.current) return;
 
-    const scrub = progressRef?.current.scrub;
-    if (scrub && scrub.id !== lastScrubId.current) {
-      sRef.current = scrub.s; // ghost jumps with the live car so comparisons restart aligned
-      lastScrubId.current = scrub.id;
-    }
-
-    if (playing) {
-      const tNow = timeAtS(table, line.sM, sRef.current);
-      sRef.current = sAtTime(table, line.sM, tNow + Math.min(delta, 0.1) * speedMultiplier);
-    }
-
-    const s = sRef.current;
+    // **the car does not integrate its own position any more.** It reads the shared lap clock and
+    // asks its own table where that puts it. The ghost does the identical thing with its own
+    // table, which is what keeps the two on one rolling start instead of two clocks that wrap at
+    // different periods. See advanceLapClock.
+    const s = sAtTime(table, line.sM, progressRef?.current.lapTS ?? 0);
     const lo = lowerIndex(line.sM, s);
     const hi = Math.min(lo + 1, line.nPoints - 1);
     const f = (s - line.sM[lo]) / Math.max(line.sM[hi] - line.sM[lo], 1e-9);

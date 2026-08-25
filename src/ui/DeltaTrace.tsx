@@ -199,7 +199,7 @@ export function DeltaTrace({
     const scrub = (clientX: number) => {
       const f = fracAtClientX(canvas, clientX, r);
       const p = progressRef.current;
-      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: Math.min(f, 0.9999) * line.loopLengthM };
+      p.scrub = { s: Math.min(f, 0.9999) * line.loopLengthM };
     };
     const down = (e: PointerEvent) => {
       dragging.current = true;

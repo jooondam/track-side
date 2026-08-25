@@ -53,6 +53,11 @@ const SHOTS = [
   ["spa-telemetry", "circuit=spa&view=chase&enter=1", { dock: true, side: true }],
   ["spa-delta", "circuit=spa&view=chase&enter=1&mu=0.95&ghost=1", { dock: true }],
   ["spa-corners", "circuit=spa&view=overview&enter=1&mu=0.95&ghost=1", { dock: true, tab: "corners" }],
+  // the ghost, several laps in. This is the frame that used to show the two cars on opposite
+  // sides of the circuit: they ran on independent clocks wrapping at their own lap times, so the
+  // quicker ghost gained a whole lap periodically and the gap grew without bound. One shared
+  // clock bounds it to a single lap's grip cost, and this shot is the evidence.
+  ["spa-ghost-laps-in", "circuit=spa&view=overview&enter=1&mu=0.95&ghost=1", { dock: true, side: true, extraFrames: 1800 }],
   // motion proof: the same frame with the shimmer on and off. `npm run shots -- motion` then
   // comparing the two "-a"/"-b" pairs is what turns "the animation is not working" into an
   // answer, instead of squinting at a still.

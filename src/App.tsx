@@ -101,7 +101,7 @@ function Viewer() {
   const sidePanel = useExpandable("side");
   const dock = useExpandable("dock");
 
-  const progressRef = useRef<LapProgress>({ sM: 0, vMps: 0, tS: 0, lapTimeS: 1, scrub: null });
+  const progressRef = useRef<LapProgress>({ sM: 0, vMps: 0, tS: 0, lapTimeS: 1, lapTS: 0, scrub: null });
   const carPoseRef = useRef({
     position: new THREE.Vector3(),
     direction: new THREE.Vector3(1, 0, 0),
@@ -118,7 +118,7 @@ function Viewer() {
         if (cancelled) return;
         setAssets(loaded);
         const p = progressRef.current;
-        p.scrub = { id: (p.scrub?.id ?? 0) + 1, s: 0 };
+        p.scrub = { s: 0 };
       })
       .catch((err: Error) => {
         if (!cancelled) setLoadError(err);
@@ -282,7 +282,7 @@ function Viewer() {
       const p = progressRef.current;
       const loop = assets.line.loopLengthM;
       const s = (((p.sM + metres) % loop) + loop) % loop;
-      p.scrub = { id: (p.scrub?.id ?? 0) + 1, s };
+      p.scrub = { s };
     },
     [assets],
   );
@@ -464,6 +464,8 @@ function Viewer() {
           assets={assets}
           result={result}
           ghostResult={ghostResult}
+          table={table}
+          ghostTable={ghostTable}
           colorMode={colorMode}
           viewpoint={viewpoint}
           orbiting={showLanding}

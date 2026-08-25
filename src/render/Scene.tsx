@@ -4,7 +4,7 @@
 // scale on the track group; car markers and labels compensate internally.
 
 import { Environment, Lightformer } from "@react-three/drei";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo } from "react";
 import { Perf } from "r3f-perf";
 import * as THREE from "three";
@@ -18,6 +18,8 @@ import { CarTrail } from "./CarTrail";
 import { CornerLabels } from "./CornerLabels";
 import { ViewOffset, type ViewInsets } from "./ViewOffset";
 import { CAMERA_FOV_DEG, lineBoxCorners } from "./viewpoints";
+import { GhostTether } from "./GhostTether";
+import { advanceLapClock, timeAtS, type LapTimeTable } from "../solver/lapTime";
 import { Kerbs } from "./Kerbs";
 import { Landmarks } from "./Landmarks";
 import { RacingLine, type ColorMode } from "./RacingLine";
@@ -31,6 +33,9 @@ interface SceneProps {
   assets: CircuitAssets;
   result: VelocityProfileResult;
   ghostResult: VelocityProfileResult | null;
+  /** the live car's and the ghost's arc-length/time mappings, built once per solve in App */
+  table: LapTimeTable;
+  ghostTable: LapTimeTable | null;
   colorMode: ColorMode;
   viewpoint: Viewpoint;
   orbiting: boolean;
@@ -62,6 +67,8 @@ export function Scene({
   assets,
   result,
   ghostResult,
+  table,
+  ghostTable,
   colorMode,
   viewpoint,
   orbiting,
@@ -125,6 +132,7 @@ export function Scene({
     >
       {/* a floor behind the dome. If SkyDome ever fails to compile or is suspended, this is
           what shows, and it is the horizon rather than the browser's default white. */}
+      <LapClock progressRef={progressRef} sM={assets.line.sM} table={table} playing={playing} speedMultiplier={speedMultiplier} />
       <Ink />
       <color attach="background" args={[tokens.sceneBg]} />
       <SkyDome sun={sun} extent={extent} reducedMotion={reducedMotion} />
@@ -213,8 +221,7 @@ export function Scene({
       <CarMarker
         line={assets.line}
         result={result}
-        playing={playing}
-        speedMultiplier={speedMultiplier}
+        table={table}
         exaggeration={exaggeration}
         progressRef={progressRef}
         poseRef={carPoseRef}
@@ -223,13 +230,24 @@ export function Scene({
         <CarMarker
           line={assets.line}
           result={ghostResult}
-          playing={playing}
-          speedMultiplier={speedMultiplier}
+          table={ghostTable ?? table}
           exaggeration={exaggeration}
           ghost
           progressRef={progressRef}
         />
       )}
+      {/* the gap, made readable. Suppressed with the cover up for the same reason the corner
+          labels are: this is an instrument, and the cover's plate is a figure. */}
+      {ghostResult && ghostTable && !orbiting && (
+        <GhostTether
+          line={assets.line}
+          table={table}
+          ghostTable={ghostTable}
+          progressRef={progressRef}
+          exaggeration={exaggeration}
+        />
+      )}
+
       {/* drei <Html> labels are real DOM, so they draw over the hero overlay: suppressed
           while the landing is up rather than fighting it with z-index */}
       {!orbiting && (
@@ -274,6 +292,47 @@ export function Scene({
  * This stays an effect rather than Canvas's onCreated, which runs once. Nothing switches it now,
  * but a renderer recreated on context loss has to be told again.
  */
+/**
+ * the lap clock, and the only thing that writes it.
+ *
+ * Playback used to live inside each car marker, which meant there were two clocks wrapping at two
+ * different lap times; the quicker ghost gained a whole lap periodically and the gap grew without
+ * bound. One owner, both cars reading it, is what makes the rolling start possible at all.
+ *
+ * It also applies scrub requests and **clears them**. The request used to carry an id because two
+ * independent markers each had to apply it exactly once; with one consumer that handshake is gone,
+ * and clearing fixes a real defect, since the un-cleared field was adopted by any marker mounting
+ * later. That is what made a ghost switched on mid-lap appear at the start line.
+ */
+function LapClock({
+  progressRef,
+  sM,
+  table,
+  playing,
+  speedMultiplier,
+}: {
+  progressRef: React.MutableRefObject<LapProgress>;
+  sM: Float64Array;
+  table: LapTimeTable;
+  playing: boolean;
+  speedMultiplier: number;
+}) {
+  useFrame((_, delta) => {
+    const p = progressRef.current;
+    if (p.scrub) {
+      p.lapTS = timeAtS(table, sM, p.scrub.s);
+      p.scrub = null;
+    } else if (playing) {
+      p.lapTS = advanceLapClock(p.lapTS, delta, speedMultiplier, table.lapTimeS);
+    } else if (p.lapTS > table.lapTimeS) {
+      // a re-solve moves the end of the lap. Without this a paused car sitting past the new lap
+      // time would jump on the next frame that does wrap it.
+      p.lapTS = advanceLapClock(p.lapTS, 0, 1, table.lapTimeS);
+    }
+  });
+  return null;
+}
+
 function Ink() {
   const gl = useThree((s) => s.gl);
   useEffect(() => {
