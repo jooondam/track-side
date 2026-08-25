@@ -21,6 +21,7 @@ import { formatDeltaS } from "./primitives";
 import { buildCornerRows } from "./cornerRows";
 import type { LapTimeTable } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
+import { TYPE } from "./theme";
 
 interface CornerReportProps {
   line: LineData;
@@ -47,8 +48,8 @@ export function CornerReport({
   const th: React.CSSProperties = {
     textAlign: "right",
     fontWeight: 500,
-    fontSize: 12,
-    letterSpacing: "0.06em",
+    fontSize: TYPE.size.label,
+    letterSpacing: TYPE.track.label,
     textTransform: "uppercase",
     color: "var(--text-dim)",
     padding: "0 var(--s2) 3px",
@@ -62,7 +63,7 @@ export function CornerReport({
     color: "var(--text-muted)",
     fontVariantNumeric: "tabular-nums",
     fontFamily: "var(--font-mono)",
-    fontSize: 12,
+    fontSize: TYPE.size.label,
   };
 
   return (

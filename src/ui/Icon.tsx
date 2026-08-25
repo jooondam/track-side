@@ -27,9 +27,6 @@ export type IconName =
   | "pause"
   | "prev"
   | "next"
-  | "up"
-  | "down"
-  | "flat"
   | "caret";
 
 const STROKE = { stroke: "currentColor", strokeWidth: 1.5, fill: "none" } as const;
@@ -82,9 +79,6 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="M6 2.75 11.5 8 6 13.25" />
     </g>
   ),
-  up: <path d="M8 3.5 13.5 12h-11Z" fill="currentColor" />,
-  down: <path d="M8 12.5 2.5 4h11Z" fill="currentColor" />,
-  flat: <rect x="2.5" y="7.25" width="11" height="1.5" fill="currentColor" />,
   // the select's own mark. A caret, not the filled triangle the platform draws, because the
   // field it sits in is a ruled box rather than a button.
   caret: (

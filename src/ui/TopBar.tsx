@@ -4,7 +4,7 @@
 // has receded.
 
 import { IconButton, Select } from "./primitives";
-import { useTheme } from "./theme";
+import { useTheme, TYPE } from "./theme";
 import type { TrackDefinition } from "../tracks";
 import { Icon } from "./Icon";
 
@@ -73,9 +73,9 @@ export function TopBar({
           display: "flex",
           alignItems: "baseline",
           gap: 6,
-          fontSize: 15,
+          fontSize: TYPE.size.value,
           fontWeight: 700,
-          letterSpacing: "0.02em",
+          letterSpacing: TYPE.track.label,
           whiteSpace: "nowrap",
         }}
       >
@@ -110,8 +110,8 @@ export function TopBar({
       >
         <span
           style={{
-            fontSize: 12,
-            letterSpacing: "0.09em",
+            fontSize: TYPE.size.label,
+            letterSpacing: TYPE.track.label,
             textTransform: "uppercase",
             color: "var(--text-muted)",
           }}
@@ -121,7 +121,7 @@ export function TopBar({
         <span
           className="tnum"
           style={{
-            fontSize: 30,
+            fontSize: TYPE.size.hero,
             fontWeight: 700,
             letterSpacing: "-0.02em",
             lineHeight: 1,
@@ -130,7 +130,7 @@ export function TopBar({
         >
           {formatLapTime(lapTimeS)}
         </span>
-        <span style={{ fontSize: 12, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: TYPE.size.label, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
           GT3 · modelled
         </span>
       </div>

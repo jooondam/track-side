@@ -27,13 +27,25 @@ import { deltaToGhost, gapMetres, sAtTime } from "../solver/lapTime";
 import type { VelocityProfileResult } from "../solver/velocity";
 import type { Corner } from "../assets";
 import { Icon } from "./Icon";
+import { TYPE, useIsNarrow } from "./theme";
 
 /** the always-visible strip carrying the live readout */
 export const DOCK_STRIP_H = 34;
-// 284 = speed 132 + delta 64 + elevation 48 + timeline 40. The traces stack and the body clips,
-// so this has to be the sum rather than a round number: at the old 236 the timeline was simply
-// cut off by the delta trace being added below it.
-export const DOCK_BODY_H = 284;
+// the traces stack and the body clips, so these have to be sums rather than round numbers: at an
+// earlier round 236 the timeline was simply cut off by the delta trace being added below it.
+//
+// **The delta row is only there when there is a ghost to compare against.** With the ghost off,
+// which is the default, those 64px printed one sentence, "turn the ghost on to compare", and
+// nothing else. The invitation now lives in the strip, and the height goes back to the scene
+// through the inset path App already runs.
+const DELTA_H = 64;
+export const DOCK_BODY_H = 132 + DELTA_H + 48 + 40; // speed + delta + elevation + timeline
+export const DOCK_BODY_H_NO_GHOST = DOCK_BODY_H - DELTA_H;
+
+/** the body height for the current state, which the camera insets are derived from. */
+export function dockBodyHeight(hasGhost: boolean): number {
+  return hasGhost ? DOCK_BODY_H : DOCK_BODY_H_NO_GHOST;
+}
 
 /** which set of instruments the dock body is showing. */
 type Tab = "traces" | "corners";
@@ -63,6 +75,7 @@ export function TelemetryDock(props: TelemetryDockProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(bodyRef);
   const [tab, setTab] = useState<Tab>("traces");
+  const narrow = useIsNarrow();
 
   // the g-g sits beside the traces and takes width from them, so it is the first thing to go on
   // a narrow dock. The traces are the primary read; the square is the diagnostic.
@@ -117,17 +130,27 @@ export function TelemetryDock(props: TelemetryDockProps) {
           flexShrink: 0,
         }}
       >
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.09em",
-            textTransform: "uppercase",
-            color: "var(--text-dim)",
-          }}
-        >
-          Telemetry
-        </span>
+        {/* the panel's own name, and the first thing to go when the row is short.
+ 
+            It conveys nothing the reader does not already have: it names the container it is
+            inside, and the numbers beside it are the information. Dropped outright on a phone
+            rather than clipped, because a truncated word is worse than no word. This is what
+            closes the 390px collision PLAN.md has been carrying, where the readout wrapped onto
+            three lines and printed straight through it. */}
+        {!narrow && (
+          <span
+            style={{
+              fontSize: TYPE.size.label,
+              fontWeight: TYPE.weight.bold,
+              letterSpacing: TYPE.track.label,
+              textTransform: "uppercase",
+              color: "var(--text-dim)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Telemetry
+          </span>
+        )}
         <LiveReadout progressRef={props.progressRef} result={props.result} line={props.line} />
         <LiveDelta
           progressRef={props.progressRef}
@@ -158,7 +181,7 @@ export function TelemetryDock(props: TelemetryDockProps) {
       <div
         ref={bodyRef}
         style={{
-          height: dock.expanded ? DOCK_BODY_H : 0,
+          height: dock.expanded ? dockBodyHeight(props.ghostTable !== null) : 0,
           minWidth: 0,
           overflow: "hidden",
           transition: "height var(--t-base) var(--ease)",
@@ -178,15 +201,17 @@ export function TelemetryDock(props: TelemetryDockProps) {
                 onScrubStart={scrubStart}
                 onCornerSelect={props.onCornerSelect}
               />
-              <DeltaTrace
-                line={props.line}
-                table={props.table}
-                ghostTable={props.ghostTable}
-                width={traceWidth}
-                height={64}
-                progressRef={props.progressRef}
-                onScrubStart={scrubStart}
-              />
+              {props.ghostTable && (
+                <DeltaTrace
+                  line={props.line}
+                  table={props.table}
+                  ghostTable={props.ghostTable}
+                  width={traceWidth}
+                  height={DELTA_H}
+                  progressRef={props.progressRef}
+                  onScrubStart={scrubStart}
+                />
+              )}
               <ElevationStrip
                 line={props.line}
                 width={traceWidth}
@@ -260,15 +285,30 @@ function LiveReadout({
     return () => cancelAnimationFrame(raf);
   }, [progressRef, result, line]);
 
-  const cap: React.CSSProperties = { color: "var(--text-dim)", fontSize: 12, letterSpacing: "0.06em" };
+  // nowrap on every readout: these are the information in the strip, so they hold their line and
+  // the panel's own name gives way instead
+  const narrow = useIsNarrow();
+  const cap: React.CSSProperties = {
+    color: "var(--text-dim)",
+    fontSize: TYPE.size.label,
+    letterSpacing: TYPE.track.label,
+    whiteSpace: "nowrap",
+  };
   return (
-    <span style={{ display: "flex", gap: "var(--s3)", alignItems: "baseline" }}>
+    <span style={{ display: "flex", gap: "var(--s3)", alignItems: "baseline", flexShrink: 0 }}>
       <span style={cap}>
-        v <span ref={vRef} className="tnum" style={{ color: "var(--text-muted)", fontSize: 12 }} />
+        v <span ref={vRef} className="tnum" style={{ color: "var(--text-muted)", fontSize: TYPE.size.label }} />
       </span>
-      <span style={cap}>
-        ax/ay <span ref={gRef} className="tnum" style={{ color: "var(--text-muted)", fontSize: 12 }} />
-      </span>
+      {/* dropped on a phone, where the row cannot hold the numbers and the tabs at once and the
+          tabs are the only way to reach the corner report. This is the one to lose: it is two
+          numbers of the same channel the g-g square draws, and the g-g is itself dropped below
+          760px, so at this width ax/ay has no companion to be read against. Speed and the delta
+          survive, which are the two the collapsed strip exists for. */}
+      {!narrow && (
+        <span style={cap}>
+          ax/ay <span ref={gRef} className="tnum" style={{ color: "var(--text-muted)", fontSize: TYPE.size.label }} />
+        </span>
+      )}
     </span>
   );
 }
@@ -323,11 +363,35 @@ function LiveDelta({
     return () => cancelAnimationFrame(raf);
   }, [progressRef, table, ghostTable, line]);
 
-  if (!ghostTable) return null;
+  // with no ghost there is nothing to compare, and the delta trace is not rendered at all. The
+  // invitation lives here instead of in 64px of otherwise empty chart.
+  if (!ghostTable) {
+    return (
+      <span
+        style={{
+          color: "var(--text-dim)",
+          fontSize: TYPE.size.label,
+          letterSpacing: TYPE.track.label,
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
+        no ghost
+      </span>
+    );
+  }
   return (
-    <span style={{ color: "var(--text-dim)", fontSize: 12, letterSpacing: "0.06em" }}>
-      vs ghost <span ref={ref} className="tnum" style={{ fontSize: 12 }} />{" "}
-      <span ref={gapRef} className="tnum" style={{ fontSize: 12, color: "var(--text-muted)" }} />
+    <span
+      style={{
+        color: "var(--text-dim)",
+        fontSize: TYPE.size.label,
+        letterSpacing: TYPE.track.label,
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+      }}
+    >
+      vs ghost <span ref={ref} className="tnum" style={{ fontSize: TYPE.size.label }} />{" "}
+      <span ref={gapRef} className="tnum" style={{ fontSize: TYPE.size.label, color: "var(--text-muted)" }} />
     </span>
   );
 }

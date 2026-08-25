@@ -27,8 +27,8 @@
 // anything: comparing two cars at the same instant compares different pieces of road.
 
 import { useEffect, useMemo, useRef } from "react";
-import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
-import { useThemeTokens } from "./theme";
+import { drawChannel, fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
+import { FONT, TYPE, useThemeTokens } from "./theme";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 import { deltaToGhost } from "../solver/lapTime";
@@ -87,22 +87,24 @@ export function DeltaTrace({
     const draw = () => {
       ctx.clearRect(0, 0, width, height);
 
-      ctx.fillStyle = tokens.textDim;
-      ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText("delta to ghost", r.left, 10);
       // the sign convention, written out where the trace is read rather than in a legend
-      // elsewhere. Dropped rather than overlapped when the dock is too narrow to hold it.
-      const keyX = r.left + ctx.measureText("delta to ghost").width + 10;
+      // elsewhere. Dropped rather than overlapped when the dock is too narrow to hold it. The
+      // chart's name moved to the gutter below, with the live value under it.
+      // the key sits at the far end of the same line the channel readout starts, so the sign
+      // convention is stated where the trace is read rather than in a legend elsewhere. Dropped
+      // rather than overlapped when the dock is too narrow to hold both.
+      ctx.fillStyle = tokens.textDim;
+      ctx.font = `${TYPE.size.label}px ${FONT.display}`;
+      ctx.textAlign = "right";
       const key = "\u2212 quicker  +  slower";
-      if (keyX + ctx.measureText(key).width < r.left + r.width - 70) {
-        ctx.fillText(key, keyX, 10);
+      if (ctx.measureText(key).width < r.width - 170) {
+        ctx.fillText(key, r.left + r.width, 10);
       }
 
+      // defensive only. The dock does not mount this chart without a ghost any more, so the
+      // 64px that used to print "turn the ghost on to compare" are not spent at all; the strip
+      // says "no ghost" instead and the height goes back to the scene.
       if (!delta) {
-        ctx.fillStyle = tokens.textDim;
-        ctx.textAlign = "center";
-        ctx.fillText("turn the ghost on to compare", r.left + r.width / 2, r.top + r.height / 2 + 4);
         raf = requestAnimationFrame(draw);
         return;
       }
@@ -152,7 +154,7 @@ export function DeltaTrace({
       // the gutter was 46px of nothing, so the trace had no scale at all: a reader could see
       // the shape but not what any height was worth. Three ticks are enough here, since the
       // span is symmetric by construction.
-      ctx.font = "12px ui-monospace, monospace";
+      ctx.font = `${TYPE.size.label}px ${FONT.mono}`;
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
       // the gutter is 46px, and a full two decimals at 12px mono does not fit once the span runs
@@ -187,10 +189,15 @@ export function DeltaTrace({
       // the delta under the cursor, which is the number the trace exists to produce
       const i = Math.min(Math.round(frac * (line.nPoints - 1)), line.nPoints - 1);
       const here = delta[i];
-      ctx.fillStyle = here <= 0 ? tokens.pos : tokens.neg;
-      ctx.font = "12px ui-monospace, monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(formatDeltaS(here), r.left + r.width, 10);
+      drawChannel(ctx, {
+        name: "delta to ghost",
+        value: formatDeltaS(here),
+        unit: "s",
+        x: r.left,
+        baseline: 10,
+        nameColor: tokens.textDim,
+        valueColor: here <= 0 ? tokens.pos : tokens.neg,
+      });
 
       raf = requestAnimationFrame(draw);
     };

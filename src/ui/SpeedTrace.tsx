@@ -8,8 +8,8 @@
 // re-renders at 60 Hz.
 
 import { useEffect, useMemo, useRef } from "react";
-import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
-import { useThemeTokens } from "./theme";
+import { drawChannel, fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
+import { FONT, TYPE, useThemeTokens } from "./theme";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 import type { VelocityProfileResult } from "../solver/velocity";
@@ -66,7 +66,7 @@ export function SpeedTrace({
     ctx.clearRect(0, 0, width, height);
 
     // gridlines and axis labels
-    ctx.font = '10px ui-monospace, "SF Mono", Menlo, monospace';
+    ctx.font = `${TYPE.size.label}px ${FONT.mono}`;
     ctx.textBaseline = "middle";
     for (const frac of [0, 0.25, 0.5, 0.75, 1]) {
       const y = r.top + r.height - frac * r.height;
@@ -95,7 +95,7 @@ export function SpeedTrace({
       ctx.lineTo(x + 0.5, r.top + r.height + 4);
       ctx.stroke();
       if (r.width <= 460) continue;
-      ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
+      ctx.font = `${TYPE.size.label}px ${FONT.display}`;
       const short = c.name.length > 14 ? `${c.name.slice(0, 13)}…` : c.name;
       const half = ctx.measureText(short).width / 2;
       if (x - half > lastLabelRight + 6) {
@@ -103,7 +103,7 @@ export function SpeedTrace({
         ctx.fillText(short, x, height - 4);
         lastLabelRight = x + half;
       }
-      ctx.font = '10px ui-monospace, "SF Mono", Menlo, monospace';
+      ctx.font = `${TYPE.size.label}px ${FONT.mono}`;
     }
 
     // the trace, stroked as one path per contiguous phase run
@@ -134,10 +134,6 @@ export function SpeedTrace({
       runStart = i;
     }
 
-    ctx.fillStyle = tokens.textDim;
-    ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = "left";
-    ctx.fillText("speed  km/h", r.left, 10);
   }, [line, result, corners, width, height, tokens, vMaxKmh]);
 
   // the compositor: static trace + car cursor + hover crosshair
@@ -169,6 +165,17 @@ export function SpeedTrace({
       }
 
       const frac = progressRef.current.sM / line.loopLengthM;
+      // the channel and what it reads at the cursor, where the caption used to only name the
+      // chart it was already inside
+      drawChannel(ctx, {
+        name: "speed",
+        value: (progressRef.current.vMps * 3.6).toFixed(0),
+        unit: "km/h",
+        x: r.left,
+        baseline: 10,
+        nameColor: tokens.textDim,
+        valueColor: tokens.text,
+      });
       const x = r.left + Math.min(Math.max(frac, 0), 1) * r.width;
       ctx.strokeStyle = tokens.accent;
       ctx.lineWidth = 1.5;

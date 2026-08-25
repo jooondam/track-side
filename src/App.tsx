@@ -26,7 +26,7 @@ import { buildCornerRows } from "./ui/cornerRows";
 import { AppState } from "./ui/AppState";
 import { SceneBoundary } from "./ui/SceneBoundary";
 import { RAIL_COLLAPSED_W, RAIL_EXPANDED_W, SidePanel, VIEWPOINT_PILL_BAND, ViewpointPill } from "./ui/SidePanel";
-import { DOCK_BODY_H, DOCK_STRIP_H, TelemetryDock } from "./ui/TelemetryDock";
+import { DOCK_STRIP_H, TelemetryDock, dockBodyHeight } from "./ui/TelemetryDock";
 import { TOPBAR_H, TopBar } from "./ui/TopBar";
 import { ThemeProvider, useIsNarrow, usePrefersReducedMotion, useTheme, useViewportSize } from "./ui/theme";
 import { readUrlState, writeUrlState } from "./ui/urlState";
@@ -220,7 +220,11 @@ function Viewer() {
   // what the chrome covers, in canvas pixels. The rail is a drawer on narrow screens rather than
   // a persistent column, so it occludes nothing there; the dock's strip is always up.
   const railW = narrow || showLanding ? 0 : sidePanel.expanded ? RAIL_EXPANDED_W : RAIL_COLLAPSED_W;
-  const dockH = showLanding ? 0 : dock.expanded ? DOCK_STRIP_H + DOCK_BODY_H : DOCK_STRIP_H;
+  const dockH = showLanding
+    ? 0
+    : dock.expanded
+      ? DOCK_STRIP_H + dockBodyHeight(ghostTable !== null)
+      : DOCK_STRIP_H;
   // while the cover is up the camera composes for the diagram plate, which is a bounded figure
   // on the sheet rather than a backdrop behind it. The canvas is the whole window there, since
   // the top bar is not rendered until the cover is dismissed.

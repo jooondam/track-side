@@ -5,7 +5,7 @@
 
 import { useMemo } from "react";
 import { Panel } from "./primitives";
-import { useIsNarrow, useThemeTokens } from "./theme";
+import { useIsNarrow, useThemeTokens, TYPE } from "./theme";
 import type { ColorMode } from "../render/RacingLine";
 import { viridis } from "../render/RacingLine";
 import type { VelocityProfileResult } from "../solver/velocity";
@@ -26,7 +26,7 @@ function Swatch({ color, label }: { color: string; label: string }) {
           borderRadius: 1,
         }}
       />
-      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
+      <span style={{ fontSize: TYPE.size.label, color: "var(--text-muted)" }}>{label}</span>
     </span>
   );
 }
@@ -84,7 +84,7 @@ export function ColorLegend({ colorMode, result }: ColorLegendProps) {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              fontSize: 12,
+              fontSize: TYPE.size.label,
               color: "var(--text-dim)",
               marginTop: 2,
             }}

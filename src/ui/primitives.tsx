@@ -19,9 +19,10 @@
 import { forwardRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "./Icon";
+import { TYPE } from "./theme";
 
 /** the smallest type in the interface. 10px was below every floor the project set itself. */
-const LABEL_SIZE = 12;
+const LABEL_SIZE = TYPE.size.label;
 
 // forwards its ref so HelpOverlay can query it for a focus trap
 export const Panel = forwardRef<
@@ -75,10 +76,6 @@ export function Rule({ weight = "hair" }: { weight?: "hair" | "strong" }) {
   );
 }
 
-export function Divider() {
-  return <Rule />;
-}
-
 /** a column head: the label, a strong rule under it, then the rows. This is the run plan's own
  *  grouping device, and it replaces the bordered card the panels used to be built from. */
 export function Section({
@@ -91,7 +88,7 @@ export function Section({
   action?: ReactNode;
 }) {
   return (
-    <section style={{ padding: "var(--s3)" }}>
+    <section style={{ padding: "var(--s2) var(--s3)" }}>
       <div
         style={{
           display: "flex",
@@ -105,7 +102,7 @@ export function Section({
             margin: 0,
             fontSize: LABEL_SIZE,
             fontWeight: 700,
-            letterSpacing: "0.1em",
+            letterSpacing: TYPE.track.label,
             textTransform: "uppercase",
             color: "var(--text-muted)",
           }}
@@ -114,78 +111,11 @@ export function Section({
         </h2>
         {action}
       </div>
-      <div style={{ marginTop: 4, marginBottom: "var(--s3)" }}>
+      <div style={{ marginTop: 3, marginBottom: "var(--s2)" }}>
         <Rule weight="strong" />
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)" }}>{children}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s2)" }}>{children}</div>
     </section>
-  );
-}
-
-/**
- * one ruled row of the sheet: label at the left, a printed leader across the gap, value at the
- * right. The leader is what makes a column of these read as a filled-in form rather than as a
- * list of floating pairs, and it is drawn with a repeating gradient rather than dot characters so
- * it cannot be selected or read aloud.
- */
-export function Field({
-  label,
-  value,
-  unit,
-  note,
-  tone,
-}: {
-  /** Set in uppercase by CSS, so keep it out: MU uppercases to \u039c, which reads as a
-   *  Latin M. "vs ghost \u03bc1.20" printed as "VS GHOST M1.20". Grip belongs in `note`. */
-  label: string;
-  value: string;
-  unit?: string;
-  /** provenance: where this number came from, or what it is not */
-  note?: string;
-  tone?: "pos" | "neg";
-}) {
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "var(--s2)" }}>
-        <span style={{ fontSize: LABEL_SIZE, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-          {label}
-        </span>
-        <span
-          aria-hidden="true"
-          style={{
-            flex: 1,
-            height: "1em",
-            minWidth: 8,
-            backgroundImage:
-              "radial-gradient(circle, var(--line) 1px, transparent 1px)",
-            backgroundSize: "5px 1px",
-            backgroundPosition: "0 bottom 0.28em",
-            backgroundRepeat: "repeat-x",
-          }}
-        />
-        <span
-          className="tnum"
-          style={{
-            fontSize: 14,
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-            color:
-              tone === "neg" ? "var(--neg)" : tone === "pos" ? "var(--pos)" : "var(--text)",
-          }}
-        >
-          {value}
-          {unit && (
-            <span style={{ fontSize: LABEL_SIZE, fontWeight: 400, color: "var(--text-muted)" }}>
-              {" "}
-              {unit}
-            </span>
-          )}
-        </span>
-      </div>
-      {note && (
-        <div style={{ fontSize: LABEL_SIZE, color: "var(--text-dim)", marginTop: 2 }}>{note}</div>
-      )}
-    </div>
   );
 }
 
@@ -221,9 +151,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         background: primary || on ? "var(--text)" : "transparent",
         color: primary || on ? "var(--panel)" : "var(--text-muted)",
         border: `1px solid ${primary || on ? "var(--text)" : "var(--line)"}`,
-        fontSize: size === "md" ? 14 : 12,
-        fontWeight: primary || on ? 600 : 500,
-        letterSpacing: "0.01em",
+        fontSize: size === "md" ? TYPE.size.value : TYPE.size.label,
+        fontWeight: primary || on ? TYPE.weight.bold : TYPE.weight.medium,
+        letterSpacing: TYPE.track.normal,
         whiteSpace: "nowrap",
         transition:
           "background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease)",
@@ -275,7 +205,7 @@ export function Check({
         gap: "var(--s2)",
         minHeight: 24,
         cursor: "pointer",
-        fontSize: 13,
+        fontSize: TYPE.size.label,
         color: "var(--text)",
       }}
     >
@@ -293,7 +223,7 @@ export function Check({
       />
       <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
         <span>{label}</span>
-        {note && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{note}</span>}
+        {note && <span style={{ fontSize: TYPE.size.label, color: "var(--text-dim)" }}>{note}</span>}
       </span>
     </label>
   );
@@ -323,7 +253,7 @@ export function IconButton({
         background: active ? "var(--text)" : "transparent",
         color: active ? "var(--panel)" : "var(--text-muted)",
         border: `1px solid ${active ? "var(--text)" : "var(--line)"}`,
-        fontSize: 13,
+        fontSize: TYPE.size.label,
         lineHeight: 1,
         transition: "background var(--t-fast) var(--ease), color var(--t-fast) var(--ease)",
       }}
@@ -370,7 +300,7 @@ export function Slider({
         </label>
         <span
           className="tnum"
-          style={{ fontSize: 22, color: "var(--text)", fontWeight: 600, lineHeight: 1.1 }}
+          style={{ fontSize: TYPE.size.figure, color: "var(--text)", fontWeight: 600, lineHeight: 1.1 }}
         >
           {format ? format(value) : value}
           {unit && (
@@ -411,9 +341,8 @@ export function Stat({
   unit,
   delta,
   deltaTone,
-  trend,
   note,
-  size = "md",
+  size = "sm",
 }: {
   /** Set in uppercase by CSS, so keep it out: MU uppercases to \u039c, which reads as a
    *  Latin M. "vs ghost \u03bc1.20" printed as "VS GHOST M1.20". Grip belongs in `note`. */
@@ -422,19 +351,19 @@ export function Stat({
   unit?: string;
   delta?: string;
   deltaTone?: "pos" | "neg";
-  /** direction of travel, drawn as a mark rather than stated as a colour */
-  trend?: "up" | "down" | "flat";
   /** where this number came from, or what it is not */
   note?: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  /** two sizes, because two are used. `md` and `xl` were declared and never instantiated, and
+   *  `xl` carried the only 40px in the interface. */
+  size?: "sm" | "lg";
 }) {
-  const valueSize = size === "xl" ? 40 : size === "lg" ? 26 : size === "md" ? 18 : 14;
+  const valueSize = size === "lg" ? TYPE.size.figure : TYPE.size.value;
   return (
     <div>
       <div
         style={{
           fontSize: LABEL_SIZE,
-          letterSpacing: "0.09em",
+          letterSpacing: TYPE.track.label,
           textTransform: "uppercase",
           color: "var(--text-muted)",
         }}
@@ -447,9 +376,9 @@ export function Stat({
           style={{
             fontSize: valueSize,
             color: "var(--text)",
-            fontWeight: size === "xl" ? 700 : 500,
+            fontWeight: TYPE.weight.medium,
             lineHeight: 1.15,
-            letterSpacing: size === "xl" ? "-0.02em" : 0,
+            letterSpacing: TYPE.track.normal,
           }}
         >
           {value}
@@ -460,17 +389,12 @@ export function Stat({
             </span>
           )}
         </span>
-        {trend && (
-          <span style={{ color: "var(--text-muted)", display: "flex" }}>
-            <Icon name={trend} size={9} />
-          </span>
-        )}
         {delta && (
           <span
             className="tnum"
             style={{
-              fontSize: 13,
-              fontWeight: 600,
+              fontSize: TYPE.size.label,
+              fontWeight: TYPE.weight.bold,
               color:
                 deltaTone === "neg"
                   ? "var(--neg)"
@@ -564,7 +488,7 @@ export function Kbd({ children }: { children: ReactNode }) {
         background: "transparent",
         border: "1px solid var(--line-strong)",
         fontFamily: "var(--font-mono)",
-        fontSize: 12,
+        fontSize: TYPE.size.label,
         color: "var(--text)",
         textAlign: "center",
       }}
@@ -623,7 +547,7 @@ export function Select({
           border: "1px solid var(--line)",
           borderRadius: 0,
           color: "var(--text)",
-          fontSize: 14,
+          fontSize: TYPE.size.value,
           fontWeight: 500,
           width: "100%",
         }}

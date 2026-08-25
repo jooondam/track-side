@@ -4,6 +4,7 @@
 
 import { useEffect, useRef } from "react";
 import { Button, Kbd, Panel } from "./primitives";
+import { TYPE } from "./theme";
 
 const GROUPS: { title: string; rows: [string[], string][] }[] = [
   {
@@ -101,7 +102,7 @@ export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => v
         style={{ width: 520, maxWidth: "calc(100vw - 32px)", padding: "var(--s5)" }}
       >
         <div style={{ display: "flex", alignItems: "baseline", marginBottom: "var(--s4)" }}>
-          <h2 id="help-title" style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
+          <h2 id="help-title" style={{ margin: 0, fontSize: TYPE.size.value, fontWeight: 600 }}>
             Controls
           </h2>
           <div style={{ flex: 1 }} />
@@ -114,9 +115,9 @@ export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => v
               <h3
                 style={{
                   margin: "0 0 var(--s2)",
-                  fontSize: 12,
+                  fontSize: TYPE.size.label,
                   fontWeight: 600,
-                  letterSpacing: "0.09em",
+                  letterSpacing: TYPE.track.label,
                   textTransform: "uppercase",
                   color: "var(--text-dim)",
                 }}
@@ -131,7 +132,7 @@ export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => v
                         <Kbd key={k}>{k}</Kbd>
                       ))}
                     </dt>
-                    <dd style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{action}</dd>
+                    <dd style={{ margin: 0, fontSize: TYPE.size.label, color: "var(--text-muted)" }}>{action}</dd>
                   </div>
                 ))}
               </dl>

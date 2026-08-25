@@ -6,8 +6,8 @@
 // a scrub bar is a drag target, which deserves the 44px recommendation more than a button does.
 
 import { useEffect, useRef } from "react";
-import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
-import { MATERIAL, useThemeTokens } from "./theme";
+import { drawChannel, fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
+import { MATERIAL, FONT, TYPE, useThemeTokens } from "./theme";
 import type { LapProgress } from "../render/CarMarker";
 import type { LapTimeTable } from "../solver/lapTime";
 import { sAtTime } from "../solver/lapTime";
@@ -76,14 +76,18 @@ export function Timeline({
       ctx.fillStyle = tokens.accent;
       ctx.fillRect(x - 1.5, barY - 8, 3, 16);
 
+      drawChannel(ctx, {
+        name: "lap",
+        value: mmss(p.tS),
+        x: r.left,
+        baseline: 10,
+        nameColor: tokens.textDim,
+        valueColor: tokens.textMuted,
+      });
       ctx.fillStyle = tokens.textDim;
-      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
-      ctx.textAlign = "left";
-      ctx.fillText("lap position", r.left, 10);
-      ctx.font = '11px ui-monospace, "SF Mono", Menlo, monospace';
+      ctx.font = `${TYPE.size.label}px ${FONT.mono}`;
       ctx.textAlign = "right";
-      ctx.fillStyle = tokens.textMuted;
-      ctx.fillText(`${mmss(p.tS)} / ${mmss(table.lapTimeS)}`, r.left + r.width, 10);
+      ctx.fillText(mmss(table.lapTimeS), r.left + r.width, 10);
 
       raf = requestAnimationFrame(draw);
     };

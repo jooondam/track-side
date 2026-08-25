@@ -33,7 +33,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 import type { VelocityProfileResult } from "../solver/velocity";
-import { useThemeTokens } from "./theme";
+import { FONT, TYPE, useThemeTokens } from "./theme";
 import { prepareCanvas } from "./canvasUtils";
 
 const HEIGHT = 132;
@@ -121,13 +121,15 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
     // the centre line: a right-aligned label sitting against the canvas edge was being clipped by
     // the dock, and there is no width here to spend on finding out by how much.
     ctx.fillStyle = style.label;
-    ctx.font = "9px ui-monospace, monospace";
+    ctx.font = `${TYPE.size.label}px ${FONT.mono}`;
     ctx.textAlign = "left";
     ctx.fillText("accel", c + 3, 10);
     ctx.fillText("brake", c + 3, size - 3);
-    // "flat" is load-bearing: see the note at the top about compressions putting the car outside
-    // this ring on purpose
-    ctx.fillText(`${mu.toFixed(2)} g flat`, 3, size - 3);
+    // the ring's own value moved out to the figcaption. At the interface's 12px floor these three
+    // labels no longer fit one edge of a 132px square, and "1.20 g flat" ran straight into
+    // "brake". The caption is DOM, so it is neither clipped nor squeezed, and it turns a bare
+    // panel name into a statement of what the ring is. "flat" is load-bearing there exactly as it
+    // was here: see the note at the top about compressions putting the car outside the ring.
   }, [line, result, mu, style, size]);
 
   // the live layer, at frame rate
@@ -176,17 +178,20 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
   }, [line, result, progressRef, style, size]);
 
   return (
-    <figure style={{ margin: 0, padding: "var(--s2) var(--s3)", flexShrink: 0 }}>
+    // width is pinned to the canvas, not left to the caption. The caption gained the ring's own
+    // value and immediately sized the figure wider than the GG_WIDTH the dock reserves for it,
+    // which pushed the square off the right edge.
+    <figure style={{ margin: 0, padding: "var(--s2) var(--s3)", flexShrink: 0, width: size }}>
       <figcaption
         style={{
-          fontSize: 12,
-          letterSpacing: "0.06em",
+          fontSize: TYPE.size.label,
+          letterSpacing: TYPE.track.label,
           textTransform: "uppercase",
           color: "var(--text-dim)",
           marginBottom: 2,
         }}
       >
-        g-g
+        g-g <span style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>{mu.toFixed(2)} g flat</span>
       </figcaption>
       <canvas
         ref={canvasRef}

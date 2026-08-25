@@ -26,6 +26,7 @@ import { formatLapTime } from "./TopBar";
 import type { CornerRow } from "./cornerRows";
 import type { Corner } from "../assets";
 import type { GT3Vehicle } from "../solver/vehicle";
+import { TYPE } from "./theme";
 
 export interface PlateRect {
   left: number;
@@ -57,6 +58,17 @@ const STEPS: [string, string][] = [
   ["Speed", "forward-backward pass on the friction circle"],
   ["Elevation", "2023 F1 car telemetry registered onto the track"],
 ];
+
+/**
+ * the cover's masthead tracking, wider than the interface's label tracking on purpose.
+ *
+ * The viewer runs one tracking for every uppercase label, because a working screen wants a scale
+ * you stop noticing. A masthead is display type on a cover sheet and is read once, so it is
+ * allowed to be set wider. It is a named constant rather than a literal so it reads as a decision:
+ * type.test.ts bans raw letterSpacing values precisely so that the exceptions have to say what
+ * they are.
+ */
+export const MASTHEAD_TRACK = "0.14em";
 
 const RULE = "1px solid var(--line)";
 const RULE_STRONG = "2px solid var(--line-strong)";
@@ -155,8 +167,8 @@ export function Landing({
               flexWrap: "wrap",
               paddingBottom: "var(--s2)",
               borderBottom: RULE_STRONG,
-              fontSize: 12,
-              letterSpacing: "0.14em",
+              fontSize: TYPE.size.label,
+              letterSpacing: MASTHEAD_TRACK,
               textTransform: "uppercase",
               color: "var(--text-muted)",
             }}
@@ -195,7 +207,7 @@ export function Landing({
               <p
                 style={{
                   margin: 0,
-                  fontSize: 15,
+                  fontSize: TYPE.size.value,
                   lineHeight: 1.6,
                   color: "var(--text)",
                 }}
@@ -237,10 +249,10 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                 >
                   {STEPS.map(([title, detail]) => (
                     <li key={title} style={{ paddingTop: "var(--s2)", borderTop: RULE_STRONG }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+                      <div style={{ fontSize: TYPE.size.label, fontWeight: 700, color: "var(--text)" }}>
                         {title}
                       </div>
-                      <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--text-dim)" }}>
+                      <div style={{ fontSize: TYPE.size.label, lineHeight: 1.5, color: "var(--text-dim)" }}>
                         {detail}
                       </div>
                     </li>
@@ -252,8 +264,8 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
             <div style={{ minWidth: 260 }}>
               <div
                 style={{
-                  fontSize: 12,
-                  letterSpacing: "0.14em",
+                  fontSize: TYPE.size.label,
+                  letterSpacing: MASTHEAD_TRACK,
                   textTransform: "uppercase",
                   color: "var(--text-muted)",
                 }}
@@ -272,7 +284,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
               >
                 {formatLapTime(lapTimeS)}
               </div>
-              <div style={{ fontSize: 12, lineHeight: 1.55, color: "var(--text-dim)", marginTop: 4 }}>
+              <div style={{ fontSize: TYPE.size.label, lineHeight: 1.55, color: "var(--text-dim)", marginTop: 4 }}>
                 solved for a GT3-class model, {vehicle.mass_kg.toFixed(0)} kg,{" "}
                 {(vehicle.power_w / 1000).toFixed(0)} kW, rear drive.
                 <br />
@@ -328,7 +340,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
               flexWrap: "wrap",
               padding: "6px 0 var(--s5)",
               borderBottom: RULE,
-              fontSize: 12,
+              fontSize: TYPE.size.label,
               color: "var(--text-dim)",
             }}
           >
@@ -352,8 +364,8 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
               <h2
                 style={{
                   margin: 0,
-                  fontSize: 12,
-                  letterSpacing: "0.14em",
+                  fontSize: TYPE.size.label,
+                  letterSpacing: MASTHEAD_TRACK,
                   textTransform: "uppercase",
                   color: "var(--text-muted)",
                   fontWeight: 600,
@@ -361,7 +373,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
               >
                 Named corners
               </h2>
-              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              <span style={{ fontSize: TYPE.size.label, color: "var(--text-dim)" }}>
                 any row opens the circuit at that corner
               </span>
             </div>
@@ -371,7 +383,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
                 borderCollapse: "collapse",
                 width: "100%",
                 marginTop: "var(--s2)",
-                fontSize: 13,
+                fontSize: TYPE.size.label,
               }}
             >
               <caption className="sr-only">
@@ -383,8 +395,8 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
               <thead>
                 <tr
                   style={{
-                    fontSize: 12,
-                    letterSpacing: "0.06em",
+                    fontSize: TYPE.size.label,
+                    letterSpacing: TYPE.track.label,
                     textTransform: "uppercase",
                     color: "var(--text-dim)",
                   }}
@@ -473,7 +485,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
             <p
               style={{
                 margin: "var(--s3) 0 0",
-                fontSize: 12,
+                fontSize: TYPE.size.label,
                 lineHeight: 1.6,
                 color: "var(--text-dim)",
                 maxWidth: "72ch",
@@ -490,7 +502,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
             <p
               style={{
                 margin: "var(--s4) 0 0",
-                fontSize: 12,
+                fontSize: TYPE.size.label,
                 lineHeight: 1.6,
                 color: "var(--text-muted)",
                 maxWidth: "72ch",
@@ -507,7 +519,7 @@ A minimum-curvature racing line solved on measured circuit geometry, with a
               margin: "var(--s5) 0 0",
               padding: "var(--s3) 0 clamp(20px, 5vh, 44px)",
               borderTop: RULE,
-              fontSize: 12,
+              fontSize: TYPE.size.label,
               lineHeight: 1.6,
               color: "var(--text-dim)",
               maxWidth: "86ch",

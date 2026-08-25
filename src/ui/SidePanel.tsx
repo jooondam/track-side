@@ -9,6 +9,7 @@ import type { ColorMode } from "../render/RacingLine";
 import type { Viewpoint } from "../render/viewpoints";
 import { deltaToGhost } from "../solver/lapTime";
 import { Icon } from "./Icon";
+import { TYPE } from "./theme";
 
 export interface HoverInfo {
   sM: number;
@@ -144,7 +145,7 @@ export function SidePanel(props: SidePanelProps) {
               onPointerDown={() => panel.setHold(true)}
               onPointerUp={() => panel.setHold(false)}
             />
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            <div style={{ fontSize: TYPE.size.label, color: "var(--text-dim)" }}>
               re-solved in <span className="tnum">{props.solveMs.toFixed(1)} ms</span>
             </div>
           </Section>
@@ -177,7 +178,7 @@ export function SidePanel(props: SidePanelProps) {
                 style={{
                   paddingTop: "var(--s2)",
                   borderTop: "1px solid var(--line)",
-                  fontSize: 12,
+                  fontSize: TYPE.size.label,
                   color: "var(--text-muted)",
                   lineHeight: 1.7,
                 }}
@@ -320,8 +321,8 @@ function CollapsedRail({
     borderBottom: "1px solid var(--line)",
   };
   const cap: React.CSSProperties = {
-    fontSize: 12,
-    letterSpacing: "0.06em",
+    fontSize: TYPE.size.label,
+    letterSpacing: TYPE.track.label,
     textTransform: "uppercase",
     color: "var(--text-muted)",
   };
@@ -335,13 +336,13 @@ function CollapsedRail({
       <div style={cell}>
         {/* no uppercase transform here: it turns the mu into a capital Mu, which reads as "M" */}
         <div style={{ ...cap, textTransform: "none" }}>grip {MU}</div>
-        <div className="tnum" style={{ fontSize: 15, color: "var(--accent)", fontWeight: 600 }}>
+        <div className="tnum" style={{ fontSize: TYPE.size.value, color: "var(--accent)", fontWeight: 600 }}>
           {mu.toFixed(2)}
         </div>
       </div>
       <div style={cell}>
         <div style={cap}>lap</div>
-        <div className="tnum" style={{ fontSize: 12, color: "var(--text)" }}>
+        <div className="tnum" style={{ fontSize: TYPE.size.label, color: "var(--text)" }}>
           {shortLap}
         </div>
       </div>
@@ -414,8 +415,8 @@ export function ViewpointPill({
         style={{
           minWidth: 110,
           textAlign: "center",
-          fontSize: 12,
-          letterSpacing: "0.06em",
+          fontSize: TYPE.size.label,
+          letterSpacing: TYPE.track.label,
           textTransform: "uppercase",
           color: "var(--text-muted)",
         }}

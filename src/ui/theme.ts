@@ -262,7 +262,29 @@ export const MATERIAL = {
 } as const;
 
 // spacing, radius, motion and type are theme-independent
-export const SPACE = { s1: 4, s2: 8, s3: 12, s4: 16, s5: 24, s6: 32 } as const;
+export const SPACE = { s1: 4, s2: 8, s3: 12, s4: 16, s5: 24 } as const;
+
+/**
+ * the whole type scale, and it is closed.
+ *
+ * There were ten sizes rendering in the viewer (9, 10, 11, 12, 13, 14, 15, 22, 26, 30), seven
+ * letterspacings and four weights, which is not a scale, it is an accumulation. These four sizes
+ * were all already in use; the change is that the other six are gone, so nothing here is invented.
+ *
+ * **`label` is the floor, and the floor is now true.** primitives.tsx has claimed 12 as the
+ * smallest type in the interface for as long as it has existed, but that only ever described the
+ * DOM: the four canvas charts drew their axis ticks and corner names at 9 and 10, which is exactly
+ * the finding the critique filed. The canvases read this now, so the claim and the artifact agree.
+ *
+ * `value` is a number read at a glance, `figure` a number that anchors a section, `hero` the lap
+ * time, which is the answer the whole tool exists to produce and is the only thing at that size.
+ */
+export const TYPE = {
+  size: { label: 12, value: 15, figure: 22, hero: 30 },
+  /** two, not seven. Uppercase labels track out; everything else does not. */
+  track: { normal: "0", label: "0.08em" },
+  weight: { regular: 400, medium: 500, bold: 700 },
+} as const;
 // paper is cut square. Nothing in a run book has a rounded corner, and the 2-to-4px radii that
 // were here are the single cheapest tell that a surface was assembled from a component library
 // rather than drawn.
@@ -348,6 +370,11 @@ ${themeBlock("light")}
 
 :root {
 ${space}
+  --t-label: ${TYPE.size.label}px;
+  --t-value: ${TYPE.size.value}px;
+  --t-figure: ${TYPE.size.figure}px;
+  --t-hero: ${TYPE.size.hero}px;
+  --track-label: ${TYPE.track.label};
   --radius-sm: ${RADIUS.sm}px;
   --radius-md: ${RADIUS.md}px;
   --radius-lg: ${RADIUS.lg}px;

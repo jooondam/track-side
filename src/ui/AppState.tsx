@@ -13,6 +13,8 @@ import type { LoadFailure } from "../assets";
 import type { TrackDefinition } from "../tracks";
 import { Button, Select } from "./primitives";
 import { Icon } from "./Icon";
+import { TYPE } from "./theme";
+import { MASTHEAD_TRACK } from "./Landing";
 
 interface AppStateProps {
   kind: "loading" | "error" | "webgl";
@@ -101,8 +103,8 @@ export function AppState({
             display: "flex",
             alignItems: "center",
             gap: 8,
-            fontSize: 12,
-            letterSpacing: "0.16em",
+            fontSize: TYPE.size.label,
+            letterSpacing: MASTHEAD_TRACK,
             textTransform: "uppercase",
             color: "var(--text-dim)",
           }}
@@ -114,9 +116,9 @@ export function AppState({
         </div>
         <div style={{ height: 2, background: "var(--line-strong)", marginTop: "var(--s2)" }} />
 
-        <h1 style={{ margin: "var(--s3) 0 var(--s2)", fontSize: 18, fontWeight: 600 }}>{title}</h1>
+        <h1 style={{ margin: "var(--s3) 0 var(--s2)", fontSize: TYPE.size.figure, fontWeight: 600 }}>{title}</h1>
 
-        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: "var(--text-muted)" }}>
+        <p style={{ margin: 0, fontSize: TYPE.size.label, lineHeight: 1.6, color: "var(--text-muted)" }}>
           {kind === "loading"
             ? (detail ?? "loading")
             : kind === "webgl"
@@ -191,10 +193,10 @@ export function AppState({
                 display: "flex",
                 alignItems: "center",
                 gap: "var(--s2)",
-                fontSize: 12,
+                fontSize: TYPE.size.label,
                 color: "var(--text-dim)",
                 cursor: "pointer",
-                letterSpacing: "0.04em",
+                letterSpacing: TYPE.track.label,
               }}
             >
               <span className="ts-marker" style={{ display: "flex" }}>
@@ -206,7 +208,7 @@ export function AppState({
               style={{
                 margin: "var(--s2) 0 0",
                 fontFamily: "var(--font-mono)",
-                fontSize: 12,
+                fontSize: TYPE.size.label,
                 lineHeight: 1.5,
                 color: "var(--text-dim)",
                 wordBreak: "break-word",

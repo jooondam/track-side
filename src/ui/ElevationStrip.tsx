@@ -6,8 +6,8 @@
 // zero React re-renders. Click and drag scrubs, same as the speed trace above it.
 
 import { useEffect, useMemo, useRef } from "react";
-import { fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
-import { useThemeTokens } from "./theme";
+import { drawChannel, fracAtClientX, plotRect, prepareCanvas } from "./canvasUtils";
+import { FONT, TYPE, useThemeTokens } from "./theme";
 import type { LineData } from "../assets";
 import type { LapProgress } from "../render/CarMarker";
 
@@ -77,6 +77,9 @@ export function ElevationStrip({
 
       const frac = Math.min(Math.max(progressRef.current.sM / line.loopLengthM, 0), 1);
       const x = r.left + frac * r.width;
+      // the elevation under the car, which is what this chart is for and what it never said
+      const zAtCursor =
+        line.positionYup[3 * Math.min(Math.round(frac * (line.nPoints - 1)), line.nPoints - 1) + 1];
       ctx.strokeStyle = tokens.accent;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -84,10 +87,18 @@ export function ElevationStrip({
       ctx.lineTo(x + 0.5, r.top + r.height);
       ctx.stroke();
 
+      // the gutter, which used to be 46px of nothing on this chart in particular
+      drawChannel(ctx, {
+        name: "elevation",
+        value: zAtCursor.toFixed(0),
+        unit: "m",
+        x: r.left,
+        baseline: 10,
+        nameColor: tokens.textDim,
+        valueColor: tokens.textMuted,
+      });
       ctx.fillStyle = tokens.textDim;
-      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
-      ctx.textAlign = "left";
-      ctx.fillText("elevation", r.left, 10);
+      ctx.font = `${TYPE.size.label}px ${FONT.display}`;
       ctx.textAlign = "right";
       ctx.fillText(`${zSpan.toFixed(0)} m range`, r.left + r.width, 10);
 

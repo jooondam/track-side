@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import type { RefObject } from "react";
+import { FONT, TYPE } from "./theme";
 
 export interface PlotRect {
   left: number;
@@ -68,4 +69,49 @@ export function useElementWidth(ref: RefObject<HTMLElement>, fallback = 320): nu
     return () => ro.disconnect();
   }, [ref, fallback]);
   return width;
+}
+
+/**
+ * Draw a channel's name and its value at the cursor into the chart's left gutter.
+ *
+ * **The gutter used to be an axis or nothing at all.** All four charts reserve 46px of it;
+ * ElevationStrip never drew into it, and every chart separately printed a caption across its top
+ * edge that did no more than name the chart it was already inside. That is two kinds of dead
+ * pixel at once: a reserved column with nothing in it, and a label restating its own context.
+ *
+ * This is the pattern every real telemetry tool uses (MoTeC i2, Pi Toolbox, ATLAS): the gutter
+ * carries the channel and what it reads *right now*, so a stack of traces sharing one cursor is a
+ * stack of live numbers rather than a stack of shapes. The charts already share a cursor and an x
+ * axis in arc length, so this is completing a pattern rather than importing one.
+ *
+ * **One line, above the plot, not stacked inside the gutter column.** Two of these charts already
+ * draw axis ticks in that column, and a stacked name-over-value collided with them head on. The
+ * line the caption used to occupy is free, is the same for all four charts, and is wide enough
+ * for a name and a value, so that is where this goes: the caption position, now carrying a
+ * number.
+ *
+ * Name in the display face, value in mono, because a machine-printed figure is set in mono
+ * everywhere else in this interface and the split is load-bearing.
+ */
+export function drawChannel(
+  ctx: CanvasRenderingContext2D,
+  opts: {
+    name: string;
+    value: string;
+    unit?: string;
+    x: number;
+    baseline: number;
+    nameColor: string;
+    valueColor: string;
+  },
+): void {
+  const { name, value, unit, x, baseline, nameColor, valueColor } = opts;
+  ctx.textAlign = "left";
+  ctx.fillStyle = nameColor;
+  ctx.font = `${TYPE.size.label}px ${FONT.display}`;
+  ctx.fillText(name, x, baseline);
+  const nameWidth = ctx.measureText(name).width;
+  ctx.fillStyle = valueColor;
+  ctx.font = `${TYPE.size.label}px ${FONT.mono}`;
+  ctx.fillText(unit ? `${value} ${unit}` : value, x + nameWidth + 8, baseline);
 }
