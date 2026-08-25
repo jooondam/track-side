@@ -54,8 +54,16 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
   const tokens = useThemeTokens();
 
   // square: a g-g diagram with a non-uniform aspect is a lie about the friction circle, since the
-  // whole point is reading distance from the origin
+  // whole point is reading distance from the origin. The *plot* stays square; the canvas is taller
+  // than it is wide by one label band top and bottom.
   const size = HEIGHT;
+  // room for "accel" and "brake" outside the plot rather than on top of it. At the old 9px they
+  // sat inside the square and cleared the data by luck; at the interface's 12px floor they landed
+  // on the ring's upper trace and on the braking cloud. Widening the margin keeps the plot at full
+  // size, where shrinking the ring to fit the labels would have cost a quarter of the data area in
+  // a 132px square.
+  const band = TYPE.size.label + 4;
+  const canvasH = size + band * 2;
 
   const style = useMemo(
     () => ({
@@ -74,21 +82,22 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
   useEffect(() => {
     const buffer = bufferRef.current ?? document.createElement("canvas");
     bufferRef.current = buffer;
-    const ctx = prepareCanvas(buffer, size, size);
+    const ctx = prepareCanvas(buffer, size, canvasH);
     if (!ctx) return;
-    ctx.clearRect(0, 0, size, size);
+    ctx.clearRect(0, 0, size, canvasH);
 
     const c = size / 2;
+    const cy = canvasH / 2;
     const scale = c / RANGE_G; // pixels per g
 
     // axes
     ctx.strokeStyle = style.axis;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(c, 0);
-    ctx.lineTo(c, size);
-    ctx.moveTo(0, c);
-    ctx.lineTo(size, c);
+    ctx.moveTo(c, band);
+    ctx.lineTo(c, band + size);
+    ctx.moveTo(0, cy);
+    ctx.lineTo(size, cy);
     ctx.stroke();
 
     // 1 g reference, then the tyre's own circle at mu * g
@@ -100,7 +109,7 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
       ctx.setLineDash(dashed ? [2, 3] : []);
       ctx.lineWidth = dashed ? 1 : 1.5;
       ctx.beginPath();
-      ctx.arc(c, c, g * scale, 0, Math.PI * 2);
+      ctx.arc(c, cy, g * scale, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -113,24 +122,24 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
       const ay = result.ayMps2[i] / G;
       // +ax is forward, and screen y grows downward, so accelerating goes up the plot
       ctx.fillStyle = ax < -0.05 ? style.brake : ax > 0.05 ? style.accel : style.cloud;
-      ctx.fillRect(c + ay * scale - 0.75, c - ax * scale - 0.75, 1.5, 1.5);
+      ctx.fillRect(c + ay * scale - 0.75, cy - ax * scale - 0.75, 1.5, 1.5);
     }
     ctx.globalAlpha = 1;
 
-    // axis labels, placed inside so they cost no layout. All left-aligned from the left edge or
-    // the centre line: a right-aligned label sitting against the canvas edge was being clipped by
-    // the dock, and there is no width here to spend on finding out by how much.
+    // axis labels, in the bands above and below the plot rather than inside it. Left-aligned from
+    // the centre line: a right-aligned label against the canvas edge was being clipped by the dock,
+    // and there is no width here to spend on finding out by how much.
     ctx.fillStyle = style.label;
     ctx.font = `${TYPE.size.label}px ${FONT.mono}`;
     ctx.textAlign = "left";
-    ctx.fillText("accel", c + 3, 10);
-    ctx.fillText("brake", c + 3, size - 3);
+    ctx.fillText("accel", c + 3, band - 4);
+    ctx.fillText("brake", c + 3, canvasH - 4);
     // the ring's own value moved out to the figcaption. At the interface's 12px floor these three
     // labels no longer fit one edge of a 132px square, and "1.20 g flat" ran straight into
     // "brake". The caption is DOM, so it is neither clipped nor squeezed, and it turns a bare
     // panel name into a statement of what the ring is. "flat" is load-bearing there exactly as it
     // was here: see the note at the top about compressions putting the car outside the ring.
-  }, [line, result, mu, style, size]);
+  }, [line, result, mu, style, size, band, canvasH]);
 
   // the live layer, at frame rate
   useEffect(() => {
@@ -139,10 +148,10 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
       const canvas = canvasRef.current;
       const buffer = bufferRef.current;
       if (canvas && buffer) {
-        const ctx = prepareCanvas(canvas, size, size);
+        const ctx = prepareCanvas(canvas, size, canvasH);
         if (ctx) {
-          ctx.clearRect(0, 0, size, size);
-          ctx.drawImage(buffer, 0, 0, size, size);
+          ctx.clearRect(0, 0, size, canvasH);
+          ctx.drawImage(buffer, 0, 0, size, canvasH);
 
           const p = progressRef.current;
           const i = Math.min(
@@ -150,9 +159,10 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
             line.nPoints - 1,
           );
           const c = size / 2;
+          const cy = canvasH / 2;
           const scale = c / RANGE_G;
           const x = c + (result.ayMps2[i] / G) * scale;
-          const y = c - (result.axMps2[i] / G) * scale;
+          const y = cy - (result.axMps2[i] / G) * scale;
 
           // a line from the origin, not just a dot: the length *is* the total g, which is the
           // number being read, and a bare dot makes you estimate it from a position
@@ -160,7 +170,7 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
           ctx.lineWidth = 1;
           ctx.globalAlpha = 0.55;
           ctx.beginPath();
-          ctx.moveTo(c, c);
+          ctx.moveTo(c, cy);
           ctx.lineTo(x, y);
           ctx.stroke();
           ctx.globalAlpha = 1;
@@ -175,7 +185,7 @@ export function GgDiagram({ line, result, mu, progressRef }: GgDiagramProps) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [line, result, progressRef, style, size]);
+  }, [line, result, progressRef, style, size, canvasH]);
 
   return (
     // width is pinned to the canvas, not left to the caption. The caption gained the ring's own

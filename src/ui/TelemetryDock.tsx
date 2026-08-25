@@ -151,12 +151,26 @@ export function TelemetryDock(props: TelemetryDockProps) {
             Telemetry
           </span>
         )}
-        <LiveReadout progressRef={props.progressRef} result={props.result} line={props.line} />
+        {/* the strip prints only what the body does not.
+ 
+            Open, the speed chart carries "speed 225 km/h" and the delta chart carries the delta in
+            seconds, so printing them here too put the same number twice within 25px and made this
+            pass's own measure, pixels per number, worse rather than better. Shut, the body is not
+            there and the strip is the only readout, which is what it exists for. So `v` and the
+            delta's seconds are dropped while the dock is open; ax/ay and the gap in metres stay in
+            both states, because nothing in the body prints either. */}
+        <LiveReadout
+          progressRef={props.progressRef}
+          result={props.result}
+          line={props.line}
+          showSpeed={!dock.expanded}
+        />
         <LiveDelta
           progressRef={props.progressRef}
           table={props.table}
           ghostTable={props.ghostTable}
           line={props.line}
+          showSeconds={!dock.expanded}
         />
         <div style={{ flex: 1 }} />
         {dock.expanded && (
@@ -258,10 +272,13 @@ function LiveReadout({
   progressRef,
   result,
   line,
+  showSpeed,
 }: {
   progressRef: React.MutableRefObject<LapProgress>;
   result: VelocityProfileResult;
   line: LineData;
+  /** false while the dock is open, where the speed chart's own channel readout carries it */
+  showSpeed: boolean;
 }) {
   const vRef = useRef<HTMLSpanElement>(null);
   const gRef = useRef<HTMLSpanElement>(null);
@@ -296,9 +313,11 @@ function LiveReadout({
   };
   return (
     <span style={{ display: "flex", gap: "var(--s3)", alignItems: "baseline", flexShrink: 0 }}>
-      <span style={cap}>
-        v <span ref={vRef} className="tnum" style={{ color: "var(--text-muted)", fontSize: TYPE.size.label }} />
-      </span>
+      {showSpeed && (
+        <span style={cap}>
+          v <span ref={vRef} className="tnum" style={{ color: "var(--text-muted)", fontSize: TYPE.size.label }} />
+        </span>
+      )}
       {/* dropped on a phone, where the row cannot hold the numbers and the tabs at once and the
           tabs are the only way to reach the corner report. This is the one to lose: it is two
           numbers of the same channel the g-g square draws, and the g-g is itself dropped below
@@ -326,11 +345,14 @@ function LiveDelta({
   table,
   ghostTable,
   line,
+  showSeconds,
 }: {
   progressRef: React.MutableRefObject<LapProgress>;
   table: LapTimeTable;
   ghostTable: LapTimeTable | null;
   line: LineData;
+  /** false while the dock is open, where the delta chart's own channel readout carries it */
+  showSeconds: boolean;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const gapRef = useRef<HTMLSpanElement>(null);
@@ -390,7 +412,12 @@ function LiveDelta({
         flexShrink: 0,
       }}
     >
-      vs ghost <span ref={ref} className="tnum" style={{ fontSize: TYPE.size.label }} />{" "}
+      vs ghost{" "}
+      <span
+        ref={ref}
+        className="tnum"
+        style={{ fontSize: TYPE.size.label, display: showSeconds ? undefined : "none" }}
+      />{" "}
       <span ref={gapRef} className="tnum" style={{ fontSize: TYPE.size.label, color: "var(--text-muted)" }} />
     </span>
   );

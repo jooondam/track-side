@@ -180,11 +180,19 @@ export function Landing({
                 reads as an unfinished sentence when it breaks after the comma. Each field is
                 nowrap and the separators are their own items, so a break lands in a gap. */}
             <span style={{ display: "flex", flexWrap: "wrap", gap: "0 0.5em", justifyContent: "flex-end" }}>
+              {/* the separator belongs to the field that follows it, not the one before it. As
+                  its own item it could end a line, and at 390 it did: the first line broke as
+                  "RUN PLAN · SPA-FRANCORCHAMPS ·" with the interpunct hanging in the margin. A
+                  leading separator on a continuation line reads as continuation; a trailing one
+                  reads as a mistake. */}
               <span style={{ whiteSpace: "nowrap" }}>Run plan</span>
-              <span aria-hidden="true">·</span>
-              <span style={{ whiteSpace: "nowrap" }}>{circuitName}</span>
-              <span aria-hidden="true">·</span>
-              <span style={{ whiteSpace: "nowrap" }}>solved, not driven</span>
+              <span style={{ whiteSpace: "nowrap" }}>
+                <span aria-hidden="true">· </span>
+                {circuitName}
+              </span>
+              <span style={{ whiteSpace: "nowrap" }}>
+                <span aria-hidden="true">· </span>solved, not driven
+              </span>
             </span>
           </div>
 

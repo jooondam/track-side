@@ -191,8 +191,8 @@ export function DeltaTrace({
       const here = delta[i];
       drawChannel(ctx, {
         name: "delta to ghost",
+        // no unit here: formatDeltaS carries its own, and passing one printed "+0.17 s  s"
         value: formatDeltaS(here),
-        unit: "s",
         x: r.left,
         baseline: 10,
         nameColor: tokens.textDim,
