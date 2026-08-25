@@ -53,6 +53,17 @@ const CASES = [
   // the entry transition is the cover's only motion promise: it hands the camera from the cover's
   // plate to the viewer's own insets. This frame is the far end of that handover.
   ["landing-after-enter", { width: 1440, height: 900 }, "circuit=spa&theme=light", {}, { landing: true, thenEnter: true }],
+  // the two surfaces no review has ever had a frame of.
+  //
+  // The precedent is the cover sheet: every frame in both harnesses carried `enter=1`, so the
+  // landing had never been photographed, and the round that finally captured it produced four of
+  // the eight material fixes. A surface with no frame is where the defects have been.
+  //
+  // Note the rail's *expanded* state is not one of these: it is the 280px column in every
+  // `-both-pinned` frame above. What has never been seen is the same rail as a drawer, which is
+  // what it becomes below 760px, over a scrim, with its own close control.
+  ["help-overlay", { width: 1440, height: 900 }, "circuit=spa&view=overview&enter=1", {}, { openHelp: true }],
+  ["mobile-drawer", { width: 390, height: 844 }, "circuit=spa&view=overview&enter=1", {}, { openDrawer: true }],
   // the error path: a circuit that does not exist. The dev/preview server answers with
   // index.html at 200, which is exactly the case that used to surface as a parser message.
   ["error-no-such-circuit", { width: 1440, height: 900 }, "circuit=nope&enter=1", {}, { expectError: true }],
@@ -93,7 +104,7 @@ async function startServer(port) {
 }
 
 /** let the scene reach a steady frame. Wall-clock waits are flaky here; rAF counts are not. */
-async function settle(page) {
+async function settle(page, frames = SETTLE_FRAMES) {
   await page.evaluate(
     (frames) =>
       new Promise((done) => {
@@ -101,7 +112,7 @@ async function settle(page) {
         const tick = () => (left-- > 0 ? requestAnimationFrame(tick) : done());
         requestAnimationFrame(tick);
       }),
-    SETTLE_FRAMES,
+    frames,
   );
 }
 
@@ -159,6 +170,16 @@ async function main() {
           timeout: READY_TIMEOUT_MS,
         });
         await settle(page);
+      }
+
+      if (opts.openHelp) {
+        await page.getByRole("button", { name: /keyboard and mouse guide/i }).click();
+        await settle(page, 6);
+      }
+
+      if (opts.openDrawer) {
+        await page.getByRole("button", { name: /open controls/i }).click();
+        await settle(page, 30); // the drawer slides: settle past the transition, not into it
       }
 
       if (opts.thenEnter) {

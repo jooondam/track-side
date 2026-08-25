@@ -83,7 +83,10 @@ export function SidePanel(props: SidePanelProps) {
     width: "min(300px, 86vw)",
     transform: drawerOpen ? "translateX(0)" : "translateX(-101%)",
     transition: "transform var(--t-base) var(--ease)",
-    boxShadow: drawerOpen ? "0 0 0 100vmax rgba(0,0,0,0.45)" : "none",
+    // the binder, not a black wash. See the note on the help overlay's veil.
+    boxShadow: drawerOpen
+      ? "0 0 0 100vmax color-mix(in srgb, var(--bg) 92%, transparent)"
+      : "none",
   };
 
   return (

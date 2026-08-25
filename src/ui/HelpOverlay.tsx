@@ -3,6 +3,8 @@
 // version was a floating div that could not be dismissed with the keyboard at all.
 
 import { useEffect, useRef } from "react";
+import { Icon } from "./Icon";
+import { MASTHEAD_TRACK } from "./Landing";
 import { Button, Kbd, Panel } from "./primitives";
 import { TYPE } from "./theme";
 
@@ -90,7 +92,12 @@ export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => v
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(0, 0, 0, 0.5)",
+        // **the binder, not a black wash.** A modal scrim of rgba(0,0,0,0.5) is the one surface
+        // that never joined this world: it greys the paper, the ink and the pencil equally, which
+        // is a lighting effect on a sheet that has no lighting. The world already has the answer
+        // and the error card already uses it, a sheet laid on the binder, so the veil is the
+        // binder's own colour at near-opacity. What recedes is not dimmed, it is covered.
+        background: "color-mix(in srgb, var(--bg) 92%, transparent)",
       }}
     >
       <Panel
@@ -99,31 +106,69 @@ export function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => v
         aria-modal="true"
         aria-labelledby="help-title"
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 520, maxWidth: "calc(100vw - 32px)", padding: "var(--s5)" }}
+        // a sheet on the binder, ruled the way every other sheet in this interface is: the
+        // masthead, the double rule under it, and the square cut. This surface had never been
+        // photographed by any review, and it was the last one still shaped like a component
+        // library's dialog: a bordered box with a sentence-case heading. The error card was
+        // restated this way and this is the same restatement.
+        style={{
+          width: 520,
+          maxWidth: "calc(100vw - 32px)",
+          padding: "var(--s5)",
+          border: "none",
+          borderTop: "2px solid var(--line-strong)",
+          borderBottom: "1px solid var(--line)",
+        }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", marginBottom: "var(--s4)" }}>
-          <h2 id="help-title" style={{ margin: 0, fontSize: TYPE.size.value, fontWeight: 600 }}>
-            Controls
-          </h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
+          <span style={{ color: "var(--accent)", display: "flex" }}>
+            <Icon name="mark" size={10} />
+          </span>
+          <span
+            style={{
+              fontSize: TYPE.size.label,
+              letterSpacing: MASTHEAD_TRACK,
+              textTransform: "uppercase",
+              color: "var(--text-dim)",
+            }}
+          >
+            track-side
+          </span>
           <div style={{ flex: 1 }} />
           <Button onClick={onClose}>close</Button>
         </div>
+        <div style={{ height: 2, background: "var(--line-strong)", marginTop: "var(--s2)" }} />
+
+        <h2
+          id="help-title"
+          style={{
+            margin: "var(--s3) 0 var(--s4)",
+            fontSize: TYPE.size.value,
+            fontWeight: TYPE.weight.bold,
+          }}
+        >
+          Controls
+        </h2>
 
         <div style={{ display: "grid", gap: "var(--s4)" }}>
           {GROUPS.map((g) => (
             <div key={g.title}>
+              {/* a column head over a rule, which is the structure the finish review called one
+                  of the few places the run plan is genuinely the world. It was the one head in the
+                  interface without its rule. */}
               <h3
                 style={{
-                  margin: "0 0 var(--s2)",
+                  margin: "0 0 3px",
                   fontSize: TYPE.size.label,
-                  fontWeight: 600,
+                  fontWeight: TYPE.weight.bold,
                   letterSpacing: TYPE.track.label,
                   textTransform: "uppercase",
-                  color: "var(--text-dim)",
+                  color: "var(--text-muted)",
                 }}
               >
                 {g.title}
               </h3>
+              <div style={{ height: 1, background: "var(--line)", marginBottom: "var(--s2)" }} />
               <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "160px 1fr", rowGap: 6 }}>
                 {g.rows.map(([keys, action]) => (
                   <div key={action} style={{ display: "contents" }}>
