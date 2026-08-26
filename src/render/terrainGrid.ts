@@ -99,6 +99,26 @@ export function buildGridAxis(origin: number, n: number, d0: number): Float64Arr
   return out;
 }
 
+/**
+ * the heightfield's centre in world x/z: the point every radius on this page is measured from.
+ *
+ * Exported rather than recomputed, because two files need it and they must not disagree:
+ * TerrainMesh anchors the fade here, and CameraRig leashes the camera to the same point. A
+ * private copy in either file is a silent way for the fade and the leash to drift apart.
+ */
+export function terrainAnchorXz(terrain: {
+  nCells: number;
+  x0: number;
+  z0: number;
+  dx: number;
+  dz: number;
+}): { x: number; z: number } {
+  return {
+    x: terrain.x0 + ((terrain.nCells - 1) * terrain.dx) / 2,
+    z: terrain.z0 + ((terrain.nCells - 1) * terrain.dz) / 2,
+  };
+}
+
 /** the radii the dot and wire fades run on. */
 export function fadeRadii(terrain: { nCells: number; dx: number; dz: number }) {
   const coreHalfDiag = Math.hypot(
@@ -108,9 +128,9 @@ export function fadeRadii(terrain: { nCells: number; dx: number; dz: number }) {
   const fadeStart = coreHalfDiag * 1.12; // Spa 2287 m: the whole heightfield stays at full brightness
   // fadeEnd is squeezed from both sides and both are asserted in terrainGrid.test.ts:
   //
-  //   below  the camera can reach extent * 2.5 from the target (CameraRig), and the fade is
-  //          anchored to the scene, so a fadeEnd under that leaves a camera sitting in a hole
-  //          with the field already gone underneath it.
+  //   below  the camera can reach cameraLeashM(extent) from *this anchor* (see cameraLeash.ts),
+  //          and the fade is anchored to the scene, so a fadeEnd under that leaves a camera
+  //          sitting in a hole with the field already gone underneath it.
   //   above  the grid physically ends at coreHalf + SKIRT_REACH_M on each axis, and the dots
   //          must be at zero before then or the rectangular edge is visible again.
   //

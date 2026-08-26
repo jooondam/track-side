@@ -210,6 +210,7 @@ export function Scene({
         reducedMotion={reducedMotion}
         center={center}
         extent={extent}
+        terrain={assets.terrain}
         carPoseRef={carPoseRef}
         onUserTakeover={onUserTakeover}
       />

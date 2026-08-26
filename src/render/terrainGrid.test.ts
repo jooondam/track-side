@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { cameraLeashM } from "./cameraLeash";
 import {
   SKIRT_REACH_M,
   SKIRT_RINGS,
@@ -6,6 +7,7 @@ import {
   fadeRadii,
   skirtReach,
   solveSkirtRatio,
+  terrainAnchorXz,
 } from "./terrainGrid";
 
 // the two shipped circuits, from public/<id>/terrain.json meta
@@ -72,12 +74,21 @@ describe("buildGridAxis", () => {
 
     it(`${c.id}: the camera cannot outrun the fade`, () => {
       // The other half of the squeeze on fadeEnd, and the half that is coupled across files:
-      // CameraRig caps OrbitControls.maxDistance at extent * 2.5, while the fade is anchored to
-      // the scene, so a camera further out than fadeEnd sits in a hole with no field under it.
-      // At the original 2.55 Monza's two numbers were equal to the metre. Raising maxDistance
-      // in CameraRig.tsx, a file that mentions no terrain, is what this guards.
+      // CameraRig leashes the camera to cameraLeashM(extent) from the terrain anchor, while the
+      // fade is anchored to that same point, so a camera further out than fadeEnd sits in a hole
+      // with no field under it. At the original 2.55 Monza's two numbers were equal to the metre.
+      // Raising the leash in cameraLeash.ts, a file that mentions no terrain, is what this
+      // guards.
       const extent = LINE_EXTENT_M[c.id];
-      expect(fadeRadii(c).fadeEnd).toBeGreaterThan(extent * 2.5 + 250);
+      expect(fadeRadii(c).fadeEnd).toBeGreaterThan(cameraLeashM(extent) + 250);
+    });
+
+    it(`${c.id}: the anchor is the centre of the heightfield`, () => {
+      // TerrainMesh measures the fade from here and CameraRig measures the leash from here; the
+      // two radii only compose because it is the same point.
+      const { x, z } = terrainAnchorXz(c);
+      expect(x).toBeCloseTo(c.x0 + ((c.nCells - 1) * c.dx) / 2, 9);
+      expect(z).toBeCloseTo(c.z0 + ((c.nCells - 1) * c.dz) / 2, 9);
     });
   }
 

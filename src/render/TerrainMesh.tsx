@@ -25,7 +25,9 @@
 // And a guarantee underneath both, which lives in two other files: fogExp2 carries everything
 // at that range to exactly tokens.sceneFog, and SkyDome paints its entire below-horizon half
 // with the same token. So the plate's far edge and the sky it ends against are the same colour
-// by construction, and the silhouette cannot be found from any camera OrbitControls allows.
+// by construction, and the silhouette cannot be found from any camera position the leash in
+// CameraRig allows -- which is what makes that leash part of this feature rather than a control
+// preference.
 //
 // The grid maths lives in ./terrainGrid so it can be tested without r3f or a GPU.
 
@@ -35,7 +37,7 @@ import * as THREE from "three";
 import type { Terrain } from "../assets";
 import { useTheme, useThemeTokens } from "../ui/theme";
 import { hexToLinearRgb } from "./colorspace";
-import { SKIRT_RINGS, buildGridAxis, fadeRadii, smoothstep01 } from "./terrainGrid";
+import { SKIRT_RINGS, buildGridAxis, fadeRadii, smoothstep01, terrainAnchorXz } from "./terrainGrid";
 
 const DROP_BELOW_ROAD = 1.0; // sit under the ribbon so it never z-fights the apron
 
@@ -276,12 +278,13 @@ export function TerrainMesh({ terrain, exaggeration, reducedMotion }: TerrainMes
     // "this is a shader" tell there is, and it breaks outright at the overview: a radius large
     // enough to fill the frame from 5 km out also reaches the geometry edge behind you.
     //
-    // The scene anchor is safe *because* CameraRig's OrbitControls caps maxDistance at
-    // extent*2.5, about 5.1 km, which is inside fadeEnd at 5.2 km. Raising that cap breaks this
-    // fade from a file that says nothing about terrain; there is a matching note over there.
-    const width = (terrain.nCells - 1) * terrain.dx;
-    const depth = (terrain.nCells - 1) * terrain.dz;
-    return new THREE.Vector3(terrain.x0 + width / 2, 0, terrain.z0 + depth / 2);
+    // The scene anchor is safe *because* CameraRig leashes the camera to this same point, at
+    // cameraLeashM(extent), which is inside fadeEnd with a few hundred metres to spare. That
+    // coupling is asserted in terrainGrid.test.ts, and it is the reason terrainAnchorXz is
+    // imported rather than inlined here: the leash and the fade have to be measured from one
+    // point, not from two that happen to agree today.
+    const { x, z } = terrainAnchorXz(terrain);
+    return new THREE.Vector3(x, 0, z);
   }, [terrain]);
 
   const { surface, wire, dots } = useMemo(() => {
