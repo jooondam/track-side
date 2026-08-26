@@ -13,6 +13,7 @@ import { loadCircuitAssets } from "./assets";
 import type { LapProgress } from "./render/CarMarker";
 import type { ColorMode } from "./render/RacingLine";
 import { Scene } from "./render/Scene";
+import { sceneCenter, sceneExtent } from "./render/sceneBounds";
 import { buildLapTimeTable } from "./solver/lapTime";
 import { VelocitySolver } from "./solver/velocity";
 import { buildViewpoints } from "./render/viewpoints";
@@ -377,31 +378,6 @@ const FALLBACK_VIEWPOINT = {
   label: "Overview",
   kind: "static" as const,
 };
-
-function sceneCenter(assets: CircuitAssets): readonly [number, number, number] {
-  const b = bounds(assets);
-  return [(b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2] as const;
-}
-
-function sceneExtent(assets: CircuitAssets): number {
-  const b = bounds(assets);
-  return Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
-}
-
-function bounds(assets: CircuitAssets) {
-  const p = assets.line.positionYup;
-  let minX = Infinity,
-    maxX = -Infinity,
-    minZ = Infinity,
-    maxZ = -Infinity;
-  for (let i = 0; i < assets.line.nPoints; i++) {
-    minX = Math.min(minX, p[3 * i]);
-    maxX = Math.max(maxX, p[3 * i]);
-    minZ = Math.min(minZ, p[3 * i + 2]);
-    maxZ = Math.max(maxZ, p[3 * i + 2]);
-  }
-  return { minX, maxX, minZ, maxZ };
-}
 
 function elevationRange(assets: CircuitAssets): number {
   let lo = Infinity;

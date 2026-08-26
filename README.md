@@ -1,40 +1,88 @@
 # track-side
 
-Ideal racing line optimizer for GT3 cars: minimum-curvature and minimum-time
-trajectory planning on real circuit geometry, with an interactive 3D track
-viewer as the delivery layer.
-
-Status: M1–M6 done: clean track geometry, a velocity profile solver, a minimum-curvature path
-solver, and an offline min-time NLP reference over a μ grid, all validated on real Monza. The
-racing line itself is grip-invariant by design (see `docs/DESIGN_NOTES.md` section 0.1); the
-interactive slider drives the velocity profile, not the path. M5 adds elevation and 3D meshes
-for Spa and Monza: real 2023 OpenF1 car-location data registered onto the vendored centerlines
-(`offline/elevation/`), z(s) profiles that reproduce Eau Rouge's ~40 m climb and each
-circuit's documented range, triangulated into glTF surfaces (`offline/mesh/`). M6 is the
-in-browser viewer.
-
-## The viewer
+An ideal-racing-line optimiser for GT3 cars, on real circuit geometry, with an interactive
+3D viewer as the delivery layer. Spa-Francorchamps and Monza.
 
 **Live: <https://jooondam.github.io/track-side/>**
 
-An interactive 3D viewer (React + react-three-fiber, `/src`): both circuits in 3D with the
-racing line coloured by phase (accel/brake/coast) or speed, a grip slider that re-solves the
-velocity profile *in the browser* on every drag (a TypeScript port of the M2 solver,
-cross-validated against the Python implementation to 0.1 m/s on both circuits, solving in
-low-single-digit milliseconds shown live in the HUD), an animated GT3 marker driving the line
-at the solved v(s), corner-name labels, a hover probe, an elevation strip, and a 1x/3x
-elevation exaggeration toggle.
+![The Spa overview: the racing line coloured by phase, over the terrain field](docs/overview.jpg)
 
-Run it locally:
+## What it does
+
+The racing line is solved as a **minimum-curvature QP** over lateral offsets in the track's
+Frenet frame: the path that a GT3 can carry the most speed through, given the real width of
+the road. Speed along it comes from a separate **velocity-profile solver** — a forward/backward
+pass over the friction ellipse with aerodynamic downforce, longitudinal load transfer, road
+gradient, and tyre load sensitivity.
+
+Splitting those two is the design decision the rest follows from. The min-curvature path does
+not depend on the friction coefficient, so grip changes the *speed* around a lap, not the
+*line*. That is what makes the grip slider in the viewer cheap enough to be interactive: only
+the velocity profile has to be re-solved, and it re-solves on every drag event, in the browser,
+in about 10 ms.
+
+Elevation is real, not decorative. z(s) for each circuit is registered from 2023 OpenF1 car-location
+data onto the vendored centrelines, and reproduces Eau Rouge's ~40 m climb and each circuit's
+documented range.
+
+![Chase camera on the approach to Eau Rouge](docs/chase.jpg)
+
+## How it fits together
+
+```
+offline/ (Python)  ->  artifacts/ + public/ (committed JSON, glTF)  ->  src/ (TypeScript viewer)
+```
+
+The heavy solving is offline and its output is committed, so the deployed site is static and the
+browser never waits on a server:
+
+| stage | what it produces |
+| --- | --- |
+| `offline/ingest`, `offline/geometry` | cleaned centrelines, widths, curvature, arc length |
+| `offline/mincurv` | the minimum-curvature racing line (and a shortest-path baseline to compare against) |
+| `offline/velocity` | the reference velocity profile and lap time |
+| `offline/elevation`, `offline/mesh` | z(s) from OpenF1 traces, triangulated into glTF track surfaces |
+| `offline/mintime` | an offline minimum-time NLP over a μ grid, as a reference solve to check the decomposition against |
+| `offline/landmarks` | corner names, braking boards, trackside furniture |
+
+`src/solver/velocity.ts` is a TypeScript port of the Python velocity solver, and it is held to
+the original rather than trusted: `src/solver/velocity.test.ts` replays committed fixtures from
+the Python implementation on both circuits and asserts lap time to 1e-6 s, v(s) to 5e-6 m/s, and
+axle loads to 0.5 N — which is the fixtures' own rounding floor, so anything that fires there is
+a port divergence and nothing else.
+
+`src/render/` is the viewer: react-three-fiber, one camera director that owns every camera move,
+a heightfield terrain that recedes into a point-and-wire field with no visible boundary, and a
+sky dome and fog that share one horizon colour so the terrain's far edge cannot be found.
+
+## Running it
 
 ```
 npm install
-npm run dev     # dev server
-npm test        # TS solver cross-validation against the Python fixtures
+npm run dev            # dev server
+npm test               # 75 tests: the solver port, and the render maths
+npm run build          # tsc --noEmit && vite build
+
+pip install -e ".[dev]"
+pytest                 # the offline pipeline
 ```
+
+CI builds, tests and deploys to GitHub Pages on every push to `main`
+(`.github/workflows/deploy.yml`).
 
 Assets under `/public` are generated by `offline/build_viewer_assets.py` from the committed
 artifacts; regenerate after changing the offline pipeline.
+
+## Layout
+
+```
+/offline/       Python: ingest, geometry, the solvers, the NLP reference
+/artifacts/     generated and committed: track JSON, glTF, mu-family solves, validation plots
+/public/        the viewer's own assets, built from /artifacts
+/src/           the TypeScript viewer and the ported in-browser solver
+/third_party/   vendored upstream data, unmodified, read-only
+/docs/          screenshots
+```
 
 ## Data rights and attribution
 
@@ -50,13 +98,3 @@ car", Vehicle System Dynamics 58(10), 2020.
 ```
 
 See `third_party/README.md` for the vendoring boundary this repo enforces.
-
-## Layout
-
-```
-/offline/            Python, ingest, geometry, NLP reference solves
-/artifacts/          generated, committed, track JSON, glTF, mu-family
-/src/                TypeScript frontend (later milestone)
-/third_party/         vendored upstream data, unmodified, read-only
-/docs/               design notes, validation results, assumptions
-```
