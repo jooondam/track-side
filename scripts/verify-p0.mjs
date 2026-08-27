@@ -62,6 +62,12 @@ const CASES = [
   // Note the rail's *expanded* state is not one of these: it is the 280px column in every
   // `-both-pinned` frame above. What has never been seen is the same rail as a drawer, which is
   // what it becomes below 760px, over a scrim, with its own close control.
+  // the braking report, which is the panel the project exists to produce and the only output in
+  // it that transfers to driving the circuit. Photographed away from the ghost's own mu on
+  // purpose: at the default 1.20 the two solves agree and its headline has nothing to say, which
+  // is a state worth having a frame of too, so `braking-at-rest` is the pair to this one.
+  ["braking-report", { width: 1440, height: 900 }, "circuit=monza&view=plan&enter=1&mu=1.40", { dock: true, side: true }, { tab: "braking" }],
+  ["braking-at-rest", { width: 1440, height: 900 }, "circuit=spa&view=plan&enter=1", { dock: true, side: true }, { tab: "braking" }],
   ["help-overlay", { width: 1440, height: 900 }, "circuit=spa&view=overview&enter=1", {}, { openHelp: true }],
   ["mobile-drawer", { width: 390, height: 844 }, "circuit=spa&view=overview&enter=1", {}, { openDrawer: true }],
   // the error path: a circuit that does not exist. The dev/preview server answers with
@@ -175,6 +181,14 @@ async function main() {
       if (opts.openHelp) {
         await page.getByRole("button", { name: /keyboard and mouse guide/i }).click();
         await settle(page, 6);
+      }
+
+      if (opts.tab) {
+        await page.getByRole("button", { name: opts.tab, exact: true }).click();
+        await settle(page, 10);
+        // the headline is the deliverable, so print it rather than only photographing it
+        const lead = await page.locator("[data-braking-lead]").first().textContent();
+        console.log(`  lead:     ${lead}`);
       }
 
       if (opts.openDrawer) {

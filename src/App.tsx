@@ -140,20 +140,21 @@ function Viewer() {
     return { result: solved, measuredMs: performance.now() - t0 };
   }, [solver, assets, mu]);
 
-  // ghost profile at the fixed reference grip. Needs its own solver instance: the live solver's
-  // result buffers are reused across solves, so sharing one would alias the ghost's arrays onto
-  // the live car's.
-  const ghostSolver = useMemo(
-    () =>
-      assets && ghostEnabled
-        ? new VelocitySolver(assets.line.sM, assets.line.kappa1pm, assets.line.zM)
-        : null,
-    [assets, ghostEnabled],
-  );
-  const ghostResult = useMemo(() => {
-    if (!ghostSolver || !assets) return null;
-    return ghostSolver.solve({ ...assets.vehicleBase, mu: GHOST_MU });
-  }, [ghostSolver, assets]);
+  // the solve at the fixed reference grip. Needs its own solver instance: the live solver's
+  // result buffers are reused across solves, so sharing one would alias the reference's arrays
+  // onto the live car's. It does not depend on mu, so it is solved once per circuit.
+  //
+  // **Solved whether or not the ghost car is drawn.** The braking report compares two grip
+  // levels, which is the one claim in this product that survives the boards being hand-placed,
+  // and hanging it off a checkbox that means "draw a second car" would put the panel's headline
+  // at the mercy of an unrelated display choice.
+  const referenceResult = useMemo(() => {
+    if (!assets) return null;
+    const s = new VelocitySolver(assets.line.sM, assets.line.kappa1pm, assets.line.zM);
+    return s.solve({ ...assets.vehicleBase, mu: GHOST_MU });
+  }, [assets]);
+  // the ghost *car* is that same solve, drawn or not
+  const ghostResult = ghostEnabled ? referenceResult : null;
 
   useEffect(() => setSolveMs(measuredMs), [measuredMs]);
 
@@ -522,9 +523,11 @@ function Viewer() {
         dock={dock}
         line={assets.line}
         result={result}
+        referenceResult={referenceResult}
         table={table}
         ghostTable={ghostTable}
         mu={mu}
+        ghostMu={GHOST_MU}
         corners={assets.landmarks.corners}
         progressRef={progressRef}
         onHoverIndex={setHoverIndex}

@@ -6,11 +6,13 @@
 //   traces    v(s), delta to ghost, elevation and the lap scrubber, all against arc length so a
 //             vertical line through them is one place on the road, plus the g-g square beside
 //   corners   the per-corner table, which is the same lap read as rows instead of as curves
+//   braking   where the car goes to the brakes for each corner, against the boards on the way in
 //
 // The readouts in the strip are written by a rAF loop straight into spans, not through React
 // state, for the same reason the chart cursors are: they update at 60 Hz.
 
 import { useEffect, useRef, useState } from "react";
+import { BrakingReport } from "./BrakingReport";
 import { CornerReport } from "./CornerReport";
 import { DeltaTrace } from "./DeltaTrace";
 import { ElevationStrip } from "./ElevationStrip";
@@ -48,15 +50,18 @@ export function dockBodyHeight(hasGhost: boolean): number {
 }
 
 /** which set of instruments the dock body is showing. */
-type Tab = "traces" | "corners";
+type Tab = "traces" | "corners" | "braking";
 
 interface TelemetryDockProps {
   dock: Expandable;
   line: LineData;
   result: VelocityProfileResult;
+  /** the fixed-grip solve the braking report measures against, always present */
+  referenceResult: VelocityProfileResult | null;
   table: LapTimeTable;
   ghostTable: LapTimeTable | null;
   mu: number;
+  ghostMu: number;
   corners: Corner[];
   progressRef: React.MutableRefObject<LapProgress>;
   onHoverIndex: (index: number | null) => void;
@@ -181,6 +186,9 @@ export function TelemetryDock(props: TelemetryDockProps) {
             <Button active={tab === "corners"} onClick={() => setTab("corners")}>
               corners
             </Button>
+            <Button active={tab === "braking"} onClick={() => setTab("braking")}>
+              braking
+            </Button>
           </div>
         )}
         <IconButton
@@ -259,6 +267,17 @@ export function TelemetryDock(props: TelemetryDockProps) {
             table={props.table}
             ghostTable={props.ghostTable}
             corners={props.corners}
+            onCornerSelect={props.onCornerSelect}
+          />
+        )}
+        {dock.expanded && width > 0 && tab === "braking" && (
+          <BrakingReport
+            line={props.line}
+            result={props.result}
+            referenceResult={props.referenceResult}
+            corners={props.corners}
+            mu={props.mu}
+            ghostMu={props.ghostMu}
             onCornerSelect={props.onCornerSelect}
           />
         )}

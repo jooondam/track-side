@@ -250,6 +250,63 @@ the 3D region whenever a panel was open, which is most of them. Judgements made 
 circuit's composition from those frames deserve a second look against fresh captures. The
 reviewer's other findings do not depend on the 3D region and stand.
 
+## The braking report, 2026-08-27
+
+M10's last deliverable, and the one output in this project that transfers to driving the
+circuit. `src/solver/brakingPoints.ts` plus a third tab in the telemetry dock: per corner, the
+nearest board, metres past it, the length of the braking zone, peak g, entry speed, the axle at
+its friction circle first, what the other axle has left, and how far the point moves against a
+solve at the reference grip.
+
+**Building it turned up the defect it was standing on.** Every corner arc length on Monza was
+100 to 340 m short of the corner it named. They were read off a circuit map, in the map's frame,
+while the generated line's `s = 0` sits wherever the source CSV happens to start. Spa was mostly
+right for the accidental reason that its CSV starts near the start line.
+
+Four landmark gates passed on that data, and `checks.py` opens by saying a corner 400 m off
+"just puts a label in a field, and nobody sees it until they look". Every gate checked the file
+against itself. None checked it against the road. Corner labels stood in fields and looked
+plausible; the corner camera framed the straight before the corner and looked like a choice.
+
+Three things changed:
+
+- **`offline/landmarks/geometry.py`** finds every corner in the shipped line: spans where
+  smoothed `|kappa|` passes 1/400 m, elements within 40 m merged, apex at the tightest point.
+  The apex is also the minimum of the geometric speed cap, so it is the same point at every mu.
+  `python -m offline.landmarks.geometry public/monza/line.json` prints the measurements.
+- **`assert_corners_match_geometry`** holds every authored corner within 25 m of a detected apex
+  and turn-in, and forbids two corners claiming one stretch of road. Corner *positions* are
+  measured; what stays authored is which corners get a name and which apex of a complex carries
+  it, because those are human calls.
+- **Both circuits' corners were rewritten** from the measurement and `landmarks.json`
+  regenerated. Only `landmarks.json` changed: the build is reproducible, verified by rebuilding
+  into a scratch directory and diffing every artifact before touching anything.
+
+Three decisions inside the report worth knowing:
+
+1. **A run is a corner's braking event when the car is still braking at turn-in.** Runs are
+   disjoint, so at most one qualifies and there is no tie-break, no distance window and no
+   nearest-corner heuristic. Braking between the two elements of Monza's first chicane is not
+   the braking for Curva Grande 350 m later; braking for Curve Paul Frere is not Blanchimont's.
+   Where one run covers two turn-ins, as Spa's does below mu 1.20, it belongs to the later
+   corner: Eau Rouge is passed through under braking, not braked for.
+2. **The reference solve is not the ghost car.** It is solved whether or not the ghost is drawn,
+   because the panel's headline compares two grip levels and a checkbox meaning "draw a second
+   car" has no business switching it off. The ghost car is now that same solve, drawn or not.
+3. **`spare` exists because `axle` is a constant.** The shipped GT3 is front-limited at every
+   corner of both circuits at every grip the slider offers, which is what a 62% front brake bias
+   on a 44% front weight distribution does. The rear carries 19 to 42% it never uses. That is a
+   finding, and the column that shows it is the argument for moving the bias back.
+
+The claim the panel leads with: at mu 1.40 the car brakes 30 m later into Monza's first chicane
+than at mu 1.20; at mu 0.90 it brakes 56 m earlier into Raidillon. **Both solves read the same
+boards, so that difference is exact however wrong the boards are.** The board columns are not,
+and the header says so.
+
+`verify-p0.mjs` gained `braking-report` and `braking-at-rest`, the second because the slider
+opens at the reference grip and the headline has nothing to say there. 245 vitest tests, 208
+pytest.
+
 ## Still open
 
 Nothing blocking. Three threads, recorded so they are not rediscovered:
@@ -262,7 +319,15 @@ Nothing blocking. Three threads, recorded so they are not rediscovered:
 2. **The 319-row harness artifact**, below. Still wants a human at `npm run dev`.
 3. **Coverage of the last review.** Its verdict covers the eight scored fixes and the three
    regressions it looked for, not the whole surface. The help overlay and the mobile drawer have
-   frames now and were fixed after it ran, so they have never been scored.
+   frames now and were fixed after it ran, so they have never been scored. The braking report
+   has never been scored either.
+4. **Trackside structures are still in the old frame.** The corner fix corrected only the one
+   structure named for a corner, Monza's Rettifilo gantry. Gantries, tree lines and the pit
+   building carry no gate and were placed the same way the corners were. Nothing numeric depends
+   on them, which is exactly why nobody will notice.
+5. **M11 is half done.** The retry nonce and URL state shipped; the error path still takes the
+   whole app down, a circuit switch still unmounts the canvas, the narrow drawer is `aria-hidden`
+   without `inert`, `ElevationStrip` has no `Path2D`, and six files run their own rAF loop.
 
 ## Verifying
 
