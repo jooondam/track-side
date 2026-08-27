@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "meta": {
-    "circuit_name": "Monza",
-    "source": "third_party/Monza.csv",
-    "elevation": "artifacts/monza/elevation.json",
+    "circuit_name": "Spa",
+    "source": "third_party/Spa.csv",
+    "elevation": "artifacts/spa/elevation.json",
     "margin_m": 1.0,
     "qp_spacing_m": 15.0,
     "vehicle": {
@@ -28,34 +28,31 @@
     {
       "mu": 0.8,
       "status": "ok",
-      "lap_time_s": 127.17516342768363,
-      "solve_time_s": 7.462891041999683,
+      "lap_time_s": 171.0798889307829,
+      "solve_time_s": 4.71098337508738,
       "ipopt_status": "Solve_Succeeded",
-      "n_iterations": 2439
+      "n_iterations": 1591
     },
     {
       "mu": 1.0,
       "status": "ok",
-      "lap_time_s": 117.55316495044707,
-      "solve_time_s": 8.359780917060561,
+      "lap_time_s": 155.82692064676138,
+      "solve_time_s": 4.090162416920066,
       "ipopt_status": "Solve_Succeeded",
-      "n_iterations": 3540
+      "n_iterations": 1492
     },
     {
       "mu": 1.2,
       "status": "ok",
-      "lap_time_s": 111.52401237037482,
-      "solve_time_s": 6.46959412493743,
+      "lap_time_s": 144.93398423579555,
+      "solve_time_s": 6.844320541014895,
       "ipopt_status": "Solve_Succeeded",
-      "n_iterations": 2234
+      "n_iterations": 1748
     },
     {
       "mu": 1.4,
-      "status": "ok",
-      "lap_time_s": 107.06319536950383,
-      "solve_time_s": 8.169386166962795,
-      "ipopt_status": "Solve_Succeeded",
-      "n_iterations": 3238
+      "status": "failed",
+      "error": "minimum-time NLP failed to converge: IPOPT status 'Maximum_Iterations_Exceeded'"
     }
   ]
 }

@@ -341,6 +341,41 @@ the field's centre inline, so the fade and the leash cannot drift apart. `App.ts
 `Scene.tsx` gave up their private bounding-box loops for `sceneBounds.ts`, which also closes
 M11's bug 8. The README was taken from origin and brought current.
 
+## M7, the writeup, 2026-08-27
+
+`docs/VALIDATION.md`, and `offline/validation/report.py` which prints every table in it. The
+document computes rather than quotes: the report runs from the vendored inputs each time, so a
+stale row is a row that disagrees with the code.
+
+That distinction was not theoretical. **The committed minimum-time sweep in `artifacts/` had been
+sitting at pre-M8 physics for four weeks**, because `build_mintime.py` never took an `--elevation`
+argument, so the M4 reference solved both circuits flat while the shipped solver graded on real z.
+Every "our decomposition vs the NLP" comparison in that window measured the grade as well as the
+method. Fixed, both circuits re-solved, and `offline/test_mintime_artifacts.py` now gates it: the
+sweep records the elevation source and the vehicle it used, and the test fails if either stops
+describing the project. Verified to bite by corrupting the artifact.
+
+**Two claims did not reproduce and are corrected in DESIGN_NOTES:** "Spa is 0.26 s slower with
+real elevation than without" is 0.13 to 0.22 s depending on grip, 0.18 s at the reference mu, and
+it had been recorded once from one solve and never re-run. The Eau Rouge climb reproduces at 40.8
+m but only over a 650 m window, which nothing had ever stated; over 500 m it is 34.3 m.
+
+What the document now says, with numbers behind each:
+
+- the decomposition costs 3.6% to 8.7% against the NLP, and **the gap widens as grip falls**
+- M8's cost is the tyre model, not the hill: at Spa, load sensitivity +1.18 s against grade's
+  +0.16 s. Monza's grade is +-0.01 s, which is the null result that makes the sign credible
+- the ICP recovers OpenF1's undocumented unit scale as 0.099962 and 0.099960 against a true 0.1,
+  on two datasets sharing no code path but the algorithm. The strongest single number here
+- the min-curvature line sits 0.78 m and 1.17 m mean from TUM's published racelines, and is
+  consistently longer, which is the objective showing through rather than an error
+- the answer to "would a race engineer trust this": the deltas, not the absolutes, with the
+  reasoning rather than the slogan
+
+Casadi is now installed locally, so the 10 NLP tests that had always skipped actually run. They
+pass, which is what confirms the M8 physics really is in the NLP and only the artifacts were
+stale.
+
 ## Still open
 
 Nothing blocking. Three threads, recorded so they are not rediscovered:

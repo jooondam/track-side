@@ -18,6 +18,7 @@ import json
 import sys
 from pathlib import Path
 
+from offline.elevation.profile import load_elevation_profile
 from offline.geometry.pipeline import build_track
 from offline.reference.mintime import solve_mintime
 from offline.validation.plots import plot_lap_time_vs_mu, plot_mintime_line
@@ -29,6 +30,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--csv", type=Path, required=True, help="path to a TUMFTM centerline CSV")
     parser.add_argument("--circuit", type=str, required=True, help="circuit name")
     parser.add_argument("--out-dir", type=Path, required=True, help="output directory")
+    parser.add_argument(
+        "--elevation",
+        type=Path,
+        default=None,
+        help=(
+            "elevation.json from build_elevation.py. Without it the NLP runs the circuit flat, "
+            "which makes it a reference for physics the shipped solver does not run"
+        ),
+    )
     parser.add_argument("--spacing-m", type=float, default=1.0)
     parser.add_argument("--gps-noise-std-m", type=float, default=0.1)
     parser.add_argument("--loop-closure-tol-m", type=float, default=1e-3)
@@ -76,6 +86,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"could not parse --mu-grid {args.mu_grid!r} as comma-separated floats", file=sys.stderr)
         return 1
 
+    # **the reference has to run the same physics as the thing it is a reference for.** Before
+    # this was wired the NLP solved every circuit flat while the sequential solver graded on real
+    # z, so the two lap times differed by the grade as well as by the method, and the comparison
+    # measured nothing. M8 put the load transfer and the tyre load sensitivity into both; this is
+    # the last channel that was only in one.
+    elevation = None
+    if args.elevation is not None:
+        try:
+            elevation = load_elevation_profile(args.elevation)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"could not read {args.elevation}: {exc}", file=sys.stderr)
+            return 1
+
     try:
         track = build_track(
             csv_path=args.csv,
@@ -96,7 +119,11 @@ def main(argv: list[str] | None = None) -> int:
         vehicle = dataclasses.replace(base_vehicle, mu=mu)
         try:
             solution = solve_mintime(
-                track, vehicle, margin_m=args.margin_m, qp_spacing_m=args.qp_spacing_m
+                track,
+                vehicle,
+                margin_m=args.margin_m,
+                qp_spacing_m=args.qp_spacing_m,
+                elevation=elevation,
             )
         except (AssertionError, ValueError, RuntimeError) as exc:
             print(f"mu={mu}: minimum-time solve failed: {exc}", file=sys.stderr)
@@ -122,7 +149,25 @@ def main(argv: list[str] | None = None) -> int:
             f"(solved in {solution.solve_time_s:.1f} s, {solution.n_iterations} iterations)"
         )
 
-    (args.out_dir / "summary.json").write_text(json.dumps(summary_rows, indent=2))
+    # **what the sweep was solved with, beside what it produced.** The committed sweep sat at
+    # pre-M8 physics for four weeks after M8 landed and nothing said so, because a bare list of
+    # lap times cannot be stale-checked against anything. This block can:
+    # test_mintime_artifacts.py asserts the shipped sweep was solved with elevation and with the
+    # vehicle the rest of the project ships.
+    summary = {
+        "schema_version": 1,
+        "meta": {
+            "circuit_name": args.circuit,
+            "source": str(args.csv),
+            "elevation": str(args.elevation) if args.elevation is not None else None,
+            "margin_m": args.margin_m,
+            "qp_spacing_m": args.qp_spacing_m,
+            "vehicle": dataclasses.asdict(dataclasses.replace(base_vehicle, mu=float("nan"))),
+        },
+        "runs": summary_rows,
+    }
+    summary["meta"]["vehicle"].pop("mu", None)
+    (args.out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
 
     if not solutions:
         print("every mu in the grid failed to converge; no plots written", file=sys.stderr)

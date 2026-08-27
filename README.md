@@ -69,6 +69,26 @@ Corner positions are measured from the line that ships, not read off a circuit m
 `offline/landmarks/checks.py` holds them within 25 m of a curvature maximum in that line. They
 were not always: see `PLAN.md`.
 
+## Does it work
+
+`docs/VALIDATION.md` is the long answer: every table in it is printed by
+`python -m offline.validation.report`, computed from the vendored inputs at the moment it runs
+rather than read back from a recorded result. The short answer:
+
+- The **decomposition** (solve the path once, then the speed along it) costs 3.6% to 8.7% of lap
+  time against a full minimum-time NLP over the same geometry and the same physics, and the gap
+  widens as grip falls.
+- The **TypeScript port** matches the Python solver to 1e-6 s of lap time, 5e-6 m/s of v(s) and
+  0.5 N of axle load, which is the fixtures' own rounding floor rather than a chosen bound.
+- The **elevation registration** recovers OpenF1's undocumented unit scale as 0.099962 at Spa and
+  0.099960 at Monza, against a true 0.1, from two datasets sharing no code path but the algorithm.
+- Spa's elevation range comes out at 102.1 m against a documented ~100 m, and the Eau Rouge climb
+  at 40.8 m over the 650 m from the bottom of the compression.
+
+And the part that matters more than any of it: **trust the deltas, not the absolutes.** The lap
+time is a model of a car nobody measured. How much later you brake at μ1.40 than at μ1.20 is
+exact, because both solves read the same boards. Section 10 of that document is the argument.
+
 ## Running it
 
 ```
@@ -77,9 +97,13 @@ npm run dev            # dev server
 npm test               # 256 tests: the solver port, the render maths, the reports
 npm run build          # tsc --noEmit && vite build
 
-pip install -e ".[dev]"
-pytest                 # 208 tests: the offline pipeline and its gates
+pip install -e ".[dev,reference]"
+pytest                 # 228 tests: the offline pipeline and its gates
+python -m offline.validation.report    # the tables in docs/VALIDATION.md
 ```
+
+The `reference` extra is CasADi, for the minimum-time NLP. Without it those 10 tests skip and the
+NLP column of the validation report is read from the committed sweep instead of re-solved.
 
 CI builds, tests and deploys to GitHub Pages on every push to `main`
 (`.github/workflows/deploy.yml`).
