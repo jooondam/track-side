@@ -101,23 +101,35 @@ class CircuitLandmarks:
 
 # ---- Spa-Francorchamps -------------------------------------------------------------------
 #
-# turn-in estimates sit ahead of each apex by roughly the length of the entry phase: short for a
-# hairpin like La Source, long for a fast entry like Pouhon. Eau Rouge and Raidillon are taken
-# flat by a GT3 in the dry, so they carry no boards.
+# every arc length below is measured from the shipped line, not read off a circuit map:
+#
+#     python -m offline.landmarks.geometry public/spa/line.json
+#
+# prints the span, apex and radius of every corner on the lap, and `assert_corners_match_
+# geometry` holds these numbers to within 25 m of that measurement. The apex is the tightest
+# point of the corner and the turn-in is where the road first bends past a 400 m radius. What is
+# still hand-authored is which corners get a name, which apex of a complex carries it, and where
+# the boards go. Eau Rouge and Raidillon are taken flat by a GT3 in the dry, so they carry none.
+#
+# Spa's numbers were close to begin with (La Source was 5 m out) because its source CSV happens
+# to start near the start line. Monza's were not. See offline/landmarks/geometry.py.
 
 SPA = CircuitLandmarks(
     circuit_id="spa",
     circuit_name="Spa",
     corners=[
-        Corner("t1", 1, "La Source", s_m=420, turn_in_s_m=395),
-        Corner("t2", 2, "Eau Rouge", s_m=1050, turn_in_s_m=1010, board_distances_m=()),
-        Corner("t3", 3, "Raidillon", s_m=1250, turn_in_s_m=1215, board_distances_m=()),
-        Corner("t5", 5, "Les Combes", s_m=2650, turn_in_s_m=2610, board_side="left"),
-        Corner("t8", 8, "Bruxelles", s_m=3350, turn_in_s_m=3305),
-        Corner("t10", 10, "Pouhon", s_m=4100, turn_in_s_m=4030, board_distances_m=(200, 100, 50)),
-        Corner("t12", 12, "Stavelot", s_m=5000, turn_in_s_m=4955, board_side="left"),
-        Corner("t14", 14, "Blanchimont", s_m=5900, turn_in_s_m=5850, board_distances_m=()),
-        Corner("t18", 18, "Bus Stop", s_m=6800, turn_in_s_m=6750),
+        Corner("t1", 1, "La Source", s_m=414, turn_in_s_m=352),
+        Corner("t2", 2, "Eau Rouge", s_m=1062, turn_in_s_m=1051, board_distances_m=()),
+        Corner("t3", 3, "Raidillon", s_m=1167, turn_in_s_m=1117, board_distances_m=()),
+        # the detector merges Les Combes with Malmedy and Bruxelles with Speaker's, because a
+        # GT3 turns through each pair without the road straightening between them. The name and
+        # the label go on the first apex, which is the one that sets the entry
+        Corner("t5", 5, "Les Combes", s_m=2434, turn_in_s_m=2375, board_side="left"),
+        Corner("t8", 8, "Bruxelles", s_m=3105, turn_in_s_m=2967),
+        Corner("t10", 10, "Pouhon", s_m=3853, turn_in_s_m=3757, board_distances_m=(200, 100, 50)),
+        Corner("t12", 12, "Stavelot", s_m=4959, turn_in_s_m=4888, board_side="left"),
+        Corner("t14", 14, "Blanchimont", s_m=5909, turn_in_s_m=5850, board_distances_m=()),
+        Corner("t18", 18, "Bus Stop", s_m=6748, turn_in_s_m=6715),
     ],
     structures=[
         Structure("start_gantry", "gantry", s_m=20, span_m=20.0, height_m=8.0),
@@ -145,19 +157,27 @@ MONZA = CircuitLandmarks(
     circuit_id="monza",
     circuit_name="Monza",
     corners=[
-        Corner("t1", 1, "Variante del Rettifilo", s_m=620, turn_in_s_m=580),
-        Corner("t3", 3, "Curva Grande", s_m=1100, turn_in_s_m=1040, board_distances_m=(200, 100, 50)),
-        Corner("t4", 4, "Variante della Roggia", s_m=1850, turn_in_s_m=1810, board_side="left"),
-        Corner("t6", 6, "Lesmo 1", s_m=2450, turn_in_s_m=2410),
-        # the Lesmos are only 300 m apart, so Lesmo 2 gets a short board set: a 300 m board for
-        # it would stand before Lesmo 1's apex, which is what the board gate caught here
-        Corner("t7", 7, "Lesmo 2", s_m=2750, turn_in_s_m=2715, board_distances_m=(200, 100, 50)),
-        Corner("t8", 8, "Variante Ascari", s_m=4000, turn_in_s_m=3955, board_side="left"),
-        Corner("t11", 11, "Parabolica", s_m=5000, turn_in_s_m=4930),
+        # measured, not mapped: every number here was between 100 m and 340 m short of its own
+        # apex until 2026-08-27, because they were read off a circuit map in the map's frame
+        # while this line's s = 0 sits wherever the source CSV starts. See geometry.py
+        Corner("t1", 1, "Variante del Rettifilo", s_m=972, turn_in_s_m=905),
+        Corner("t3", 3, "Curva Grande", s_m=1439, turn_in_s_m=1318, board_distances_m=(200, 100, 50)),
+        Corner("t4", 4, "Variante della Roggia", s_m=2136, turn_in_s_m=2100, board_side="left"),
+        # the Lesmos are 300 m apart and Lesmo 1's own 300 board lands 13 m past Roggia's apex,
+        # which is as tight as the board gate allows and is also how the circuit really is
+        Corner("t6", 6, "Lesmo 1", s_m=2551, turn_in_s_m=2449),
+        # so Lesmo 2 gets a short board set: a 300 m board for it would stand before Lesmo 1's
+        # apex, which is what the board gate caught here
+        Corner("t7", 7, "Lesmo 2", s_m=2869, turn_in_s_m=2818, board_distances_m=(200, 100, 50)),
+        Corner("t8", 8, "Variante Ascari", s_m=3929, turn_in_s_m=3894, board_side="left"),
+        Corner("t11", 11, "Parabolica", s_m=5191, turn_in_s_m=5075),
     ],
     structures=[
         Structure("start_gantry", "gantry", s_m=15, span_m=22.0, height_m=8.5),
-        Structure("rettifilo_gantry", "gantry", s_m=500, span_m=20.0, height_m=8.0),
+        # moved with the corners: at 500 it stood on the straight a third of a lap from the
+        # chicane it is named for. structures carry no gate of their own, so the rest of this
+        # list is still eyeballed, and only the ones named for a corner were corrected
+        Structure("rettifilo_gantry", "gantry", s_m=820, span_m=20.0, height_m=8.0),
         Structure("pit_building", "pit_building", s_m=200, offset_m=24.0, length_m=380.0,
                   height_m=12.0),
         Structure("serraglio_bridge", "bridge", s_m=3400, span_m=24.0, height_m=9.0),

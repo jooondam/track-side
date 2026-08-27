@@ -17,6 +17,7 @@ from offline.landmarks.data import (
     STRUCTURE_KINDS,
     CircuitLandmarks,
 )
+from offline.landmarks.geometry import detect_corner_spans, nearest_span
 
 
 def assert_corner_ids_unique(landmarks: CircuitLandmarks) -> None:
@@ -84,6 +85,72 @@ def assert_landmarks_on_track(landmarks: CircuitLandmarks, loop_length_m: float)
             raise AssertionError(
                 f"{landmarks.circuit_name} structure {structure.id}: world placement needs a "
                 f"polyline of at least two points"
+            )
+
+
+# 25 m is a quarter of the shortest corner on either circuit and about a car length and a half of
+# braking at GT3 speeds. Wide enough that a re-fit of the line moving an apex by a few metres is
+# not a failure, narrow enough that no corner can drift onto the straight before it.
+CORNER_MATCH_TOLERANCE_M = 25.0
+
+
+def assert_corners_match_geometry(
+    landmarks: CircuitLandmarks,
+    s_m,
+    kappa_1pm,
+    loop_length_m: float,
+    tolerance_m: float = CORNER_MATCH_TOLERANCE_M,
+) -> None:
+    """raise if an authored corner is not on the corner it names.
+
+    This is the gate that was missing, and its absence is the reason the module docstring above
+    is written the way it is. Every check here used to be internal to the landmark file: ids
+    unique, arc lengths inside the lap, boards ordered, structures off the road. All of them
+    passed on Monza corner data that sat up to 340 m short of the corners it named, because
+    nothing compared the numbers to the road.
+
+    A corner matches when its apex is within `tolerance_m` of a detected apex and its turn-in is
+    within `tolerance_m` of where that corner's curvature begins. Two named corners may not
+    claim the same stretch of road, which is what catches a plausible-looking number that has
+    landed on its neighbour.
+    """
+    spans = detect_corner_spans(s_m, kappa_1pm)
+    if not spans:
+        raise AssertionError(
+            f"{landmarks.circuit_name}: no corners detected in the generated line, so the "
+            f"authored ones cannot be checked against anything"
+        )
+
+    claimed: dict[float, str] = {}
+    for corner in landmarks.corners:
+        span = nearest_span(spans, corner.s_m, loop_length_m)
+        assert span is not None  # spans is non-empty
+        apex_error = abs((span.apex_s_m - corner.s_m + loop_length_m / 2) % loop_length_m - loop_length_m / 2)
+        if apex_error > tolerance_m:
+            raise AssertionError(
+                f"{landmarks.circuit_name} corner {corner.id} ({corner.name}): apex authored at "
+                f"s={corner.s_m:.0f} but the nearest corner in the geometry apexes at "
+                f"s={span.apex_s_m:.0f}, {apex_error:.0f} m away. Measure it with "
+                f"`python -m offline.landmarks.geometry` rather than off a circuit map"
+            )
+
+        owner = claimed.get(span.apex_s_m)
+        if owner is not None:
+            raise AssertionError(
+                f"{landmarks.circuit_name} corners {owner} and {corner.id} ({corner.name}) both "
+                f"claim the corner apexing at s={span.apex_s_m:.0f}"
+            )
+        claimed[span.apex_s_m] = corner.id
+
+        turn_in_error = abs(
+            (span.start_s_m - corner.turn_in_s_m + loop_length_m / 2) % loop_length_m - loop_length_m / 2
+        )
+        if turn_in_error > tolerance_m:
+            raise AssertionError(
+                f"{landmarks.circuit_name} corner {corner.id} ({corner.name}): turn-in authored "
+                f"at s={corner.turn_in_s_m:.0f} but the road starts bending at "
+                f"s={span.start_s_m:.0f}, {turn_in_error:.0f} m away. Every braking board hangs "
+                f"off this number"
             )
 
 
@@ -159,9 +226,15 @@ def assert_no_text_on_structures(landmarks: CircuitLandmarks) -> None:
             )
 
 
-def run_all_landmark_checks(landmarks: CircuitLandmarks, track, loop_length_m: float) -> None:
+def run_all_landmark_checks(landmarks: CircuitLandmarks, track, line) -> None:
+    """every gate, against the geometry that was just generated.
+
+    takes the fitted line rather than only its length, because the corner gate needs the road's
+    curvature and not just the lap's size.
+    """
     assert_corner_ids_unique(landmarks)
-    assert_landmarks_on_track(landmarks, loop_length_m)
-    assert_boards_do_not_cross_previous_corner(landmarks, loop_length_m)
+    assert_landmarks_on_track(landmarks, line.loop_length_m)
+    assert_corners_match_geometry(landmarks, line.s_m, line.kappa_1pm, line.loop_length_m)
+    assert_boards_do_not_cross_previous_corner(landmarks, line.loop_length_m)
     assert_structure_offsets_clear_the_boundary(landmarks, track)
     assert_no_text_on_structures(landmarks)

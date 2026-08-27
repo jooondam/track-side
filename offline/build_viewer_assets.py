@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"no landmark data for circuit {args.circuit!r}; add it to "
                 f"offline/landmarks/data.py"
             )
-        run_all_landmark_checks(landmarks, track, line.loop_length_m)
+        run_all_landmark_checks(landmarks, track, line)
     except (AssertionError, ValueError) as exc:
         print(f"asset build failed: {exc}", file=sys.stderr)
         return 1

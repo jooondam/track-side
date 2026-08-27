@@ -16,6 +16,7 @@ from offline.landmarks.build import landmarks_to_json_dict
 from offline.landmarks.checks import (
     assert_boards_do_not_cross_previous_corner,
     assert_corner_ids_unique,
+    assert_corners_match_geometry,
     assert_landmarks_on_track,
     assert_no_text_on_structures,
     assert_structure_offsets_clear_the_boundary,
@@ -173,3 +174,78 @@ def test_corners_are_written_in_arc_length_order() -> None:
     )
     payload = landmarks_to_json_dict(shuffled, LOOP_M)
     assert [c["id"] for c in payload["corners"]] == ["t1", "t2"]
+
+
+# ---- the corner-to-geometry gate ---------------------------------------------------------
+#
+# this one is here because its absence shipped: every Monza corner sat up to 340 m short of the
+# corner it named, and every other gate in this file passed on that data.
+
+
+def _road():
+    """a lap whose corners are where _landmarks() says they are: apexes 1000 and 3000.
+
+    triangular bends 45 m each side, so the 1/400 threshold is crossed 5.6 m up from the foot
+    and the detected turn-in lands on 961 and 2961, within the gate's tolerance of the authored
+    960 and 2950.
+    """
+    import numpy as np
+
+    s = np.arange(int(LOOP_M) + 1, dtype=float)
+    kappa = np.zeros(int(LOOP_M) + 1)
+    for centre in (1000, 3000):
+        for i in range(int(LOOP_M)):
+            d = abs((i - centre + LOOP_M / 2) % LOOP_M - LOOP_M / 2)
+            if d < 45:
+                kappa[i] += 0.02 * (1.0 - d / 45)
+    kappa[int(LOOP_M)] = kappa[0]
+    return s, kappa
+
+
+def test_committed_corner_positions_pass_against_their_own_road() -> None:
+    s, kappa = _road()
+    assert_corners_match_geometry(_landmarks(), s, kappa, LOOP_M)
+
+
+def test_an_apex_that_is_not_on_a_corner_is_rejected() -> None:
+    s, kappa = _road()
+    strayed = _landmarks(
+        corners=[
+            Corner("t1", 1, "First", s_m=1150, turn_in_s_m=1110),
+            Corner("t2", 2, "Second", s_m=3000, turn_in_s_m=2950),
+        ]
+    )
+    with pytest.raises(AssertionError, match="nearest corner in the geometry"):
+        assert_corners_match_geometry(strayed, s, kappa, LOOP_M)
+
+
+def test_a_turn_in_that_is_not_where_the_road_bends_is_rejected() -> None:
+    s, kappa = _road()
+    early = _landmarks(
+        corners=[
+            Corner("t1", 1, "First", s_m=1000, turn_in_s_m=800),
+            Corner("t2", 2, "Second", s_m=3000, turn_in_s_m=2950),
+        ]
+    )
+    with pytest.raises(AssertionError, match="Every braking board hangs off this number"):
+        assert_corners_match_geometry(early, s, kappa, LOOP_M)
+
+
+def test_two_corners_cannot_claim_the_same_corner() -> None:
+    s, kappa = _road()
+    doubled = _landmarks(
+        corners=[
+            Corner("t1", 1, "First", s_m=1000, turn_in_s_m=960),
+            Corner("t1b", 2, "Also First", s_m=1010, turn_in_s_m=965),
+        ]
+    )
+    with pytest.raises(AssertionError, match="both claim the corner"):
+        assert_corners_match_geometry(doubled, s, kappa, LOOP_M)
+
+
+def test_a_road_with_no_corners_is_reported_rather_than_passed() -> None:
+    import numpy as np
+
+    s = np.arange(int(LOOP_M) + 1, dtype=float)
+    with pytest.raises(AssertionError, match="no corners detected"):
+        assert_corners_match_geometry(_landmarks(), s, np.zeros(int(LOOP_M) + 1), LOOP_M)

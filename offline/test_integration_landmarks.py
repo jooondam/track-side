@@ -43,7 +43,7 @@ def geometry():
 @pytest.mark.parametrize("circuit_id", CIRCUIT_IDS)
 def test_committed_landmarks_pass_every_gate(geometry, circuit_id) -> None:
     track, line = geometry[circuit_id]
-    run_all_landmark_checks(CIRCUITS[circuit_id], track, line.loop_length_m)
+    run_all_landmark_checks(CIRCUITS[circuit_id], track, line)
 
 
 @pytest.mark.parametrize("circuit_id", CIRCUIT_IDS)
