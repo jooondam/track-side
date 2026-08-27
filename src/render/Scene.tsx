@@ -23,6 +23,7 @@ import { advanceLapClock, timeAtS, type LapTimeTable } from "../solver/lapTime";
 import { Kerbs } from "./Kerbs";
 import { Landmarks } from "./Landmarks";
 import { RacingLine, type ColorMode } from "./RacingLine";
+import { sceneCenter, sceneExtent } from "./sceneBounds";
 import { SkyDome } from "./SkyDome";
 import { TerrainMesh } from "./TerrainMesh";
 import { TrackMesh } from "./TrackMesh";
@@ -87,23 +88,14 @@ export function Scene({
   const tokens = useThemeTokens();
   const fitCorners = useMemo(() => lineBoxCorners(assets.line, exaggeration), [assets.line, exaggeration]);
 
-  const { center, extent } = useMemo(() => {
-    const p = assets.line.positionYup;
-    let minX = Infinity,
-      maxX = -Infinity,
-      minZ = Infinity,
-      maxZ = -Infinity;
-    for (let i = 0; i < assets.line.nPoints; i++) {
-      minX = Math.min(minX, p[3 * i]);
-      maxX = Math.max(maxX, p[3 * i]);
-      minZ = Math.min(minZ, p[3 * i + 2]);
-      maxZ = Math.max(maxZ, p[3 * i + 2]);
-    }
-    return {
-      center: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2] as const,
-      extent: Math.max(maxX - minX, maxZ - minZ),
-    };
-  }, [assets]);
+  // the same two numbers App.tsx frames the viewpoints with, from the same function. They used to
+  // be computed here and again there, which was fine while they only chose camera poses and is
+  // not fine now that `extent` also sets the camera's leash radius: the leash and the viewpoints
+  // it has to accommodate would be measuring the circuit separately.
+  const { center, extent } = useMemo(
+    () => ({ center: sceneCenter(assets), extent: sceneExtent(assets) }),
+    [assets],
+  );
 
   return (
     <Canvas
@@ -268,6 +260,7 @@ export function Scene({
         center={center}
         extent={extent}
         fitCorners={fitCorners}
+        terrain={assets.terrain}
         carPoseRef={carPoseRef}
         onUserTakeover={onUserTakeover}
       />

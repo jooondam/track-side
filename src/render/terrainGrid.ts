@@ -164,6 +164,27 @@ export function buildGridAxis(origin: number, n: number, d0: number): Float64Arr
   return out;
 }
 
+/**
+ * the heightfield's centre in world x/z: the point every radius on this page is measured from.
+ *
+ * Exported rather than recomputed, because three files need it and they must not disagree:
+ * TerrainMesh anchors the fade here, CameraRig leashes the camera to the same point, and
+ * fieldRadii's bounds are radii from it. A private copy in any of them is a silent way for the
+ * fade and the leash to drift apart.
+ */
+export function terrainAnchorXz(terrain: {
+  nCells: number;
+  x0: number;
+  z0: number;
+  dx: number;
+  dz: number;
+}): { x: number; z: number } {
+  return {
+    x: terrain.x0 + ((terrain.nCells - 1) * terrain.dx) / 2,
+    z: terrain.z0 + ((terrain.nCells - 1) * terrain.dz) / 2,
+  };
+}
+
 export interface Heightfield {
   nCells: number;
   x0: number;

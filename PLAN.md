@@ -307,6 +307,40 @@ and the header says so.
 opens at the reference grip and the headline has nothing to say there. 245 vitest tests, 208
 pytest.
 
+## The merge with origin/main, 2026-08-27
+
+`main` and `origin/main` had split at `e32cb64`: 27 commits of interface rebuild and braking
+report on one side, two commits from a separate session on the other. Merged rather than force
+pushed, because the remote side had a real bug fix in it.
+
+**What came in.** `cameraLeash.ts` and `sceneBounds.ts`, plus origin's README, which is written
+for a reader who has not seen this repo and carries two screenshots. The leash is the substantive
+part: `OrbitControls.maxDistance` caps camera-*to-target*, and every way of moving in this scene
+except zooming translates the camera and its target together, so holding W walked the pair out
+past the terrain fade with the cap never tripping, and the occluder plate's straight edge came
+back. Our own `fieldRadii` comment was quoting that broken assumption as its lower bound.
+
+**What the merge had to reconcile.** Seven files conflicted, all of them because both sides had
+rewritten the same regions for unrelated reasons. Two conflicts were real rather than textual:
+
+- `fadeRadii` no longer exists here. The rebuild replaced it with `fieldRadii`, which derives the
+  outer radius from the plate's *inscribed* radius rather than its half-diagonal, so origin's
+  clearance numbers do not describe this geometry. Re-measured: Spa has 581 m between the leash
+  and `fadeEnd`, **Monza has 256 m against an asserted floor of 250**. Monza is the binding case
+  and the test now says so by name, because anything that moves `CAMERA_LEASH_K`, `SKIRT_REACH_M`
+  or `fieldRadii`'s 0.97 trips there first.
+- `cameraLeash.test.ts` asserted the shipped viewpoints fit inside the leash using the old
+  hand-tuned model, `extent * 0.6 * fit`. The viewpoints are solved now. Rewritten to run
+  `fitDistance` over the real line box at six aspects including a portrait phone; the worst case
+  is the overview at 3802 m against a 5122 m leash. A square test box makes it look like a
+  violation, which is worth knowing before someone re-derives it: the circuits are elongated, and
+  that is the whole margin.
+
+`terrainAnchorXz` now lives in `terrainGrid.ts` and `TerrainMesh` reads it instead of computing
+the field's centre inline, so the fade and the leash cannot drift apart. `App.tsx` and
+`Scene.tsx` gave up their private bounding-box loops for `sceneBounds.ts`, which also closes
+M11's bug 8. The README was taken from origin and brought current.
+
 ## Still open
 
 Nothing blocking. Three threads, recorded so they are not rediscovered:
@@ -325,9 +359,10 @@ Nothing blocking. Three threads, recorded so they are not rediscovered:
    structure named for a corner, Monza's Rettifilo gantry. Gantries, tree lines and the pit
    building carry no gate and were placed the same way the corners were. Nothing numeric depends
    on them, which is exactly why nobody will notice.
-5. **M11 is half done.** The retry nonce and URL state shipped; the error path still takes the
-   whole app down, a circuit switch still unmounts the canvas, the narrow drawer is `aria-hidden`
-   without `inert`, `ElevationStrip` has no `Path2D`, and six files run their own rAF loop.
+5. **M11 is half done.** The retry nonce, URL state and bug 8 (`sceneBounds.ts`, via the merge)
+   shipped; the error path still takes the whole app down, a circuit switch still unmounts the
+   canvas, the narrow drawer is `aria-hidden` without `inert`, `ElevationStrip` has no `Path2D`,
+   and six files run their own rAF loop.
 
 ## Verifying
 

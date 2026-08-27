@@ -46,6 +46,7 @@ import {
   buildGridAxis,
   WIRE_STRIDE,
   fieldRadii,
+  terrainAnchorXz,
   plateHeightAt,
   plateVertexHeight,
 } from "./terrainGrid";
@@ -312,12 +313,16 @@ export function TerrainMesh({ terrain, extent, exaggeration, reducedMotion, prin
     // "this is a shader" tell there is, and it breaks outright at the overview: a radius large
     // enough to fill the frame from 5 km out also reaches the geometry edge behind you.
     //
-    // The scene anchor is safe *because* CameraRig's OrbitControls caps maxDistance at
-    // extent*2.5, about 5.1 km, which is inside fadeEnd at 5.2 km. Raising that cap breaks this
-    // fade from a file that says nothing about terrain; there is a matching note over there.
-    const width = (terrain.nCells - 1) * terrain.dx;
-    const depth = (terrain.nCells - 1) * terrain.dz;
-    return new THREE.Vector3(terrain.x0 + width / 2, 0, terrain.z0 + depth / 2);
+    // The scene anchor is safe *because* CameraRig leashes the camera to this same point, at
+    // cameraLeashM(extent), which is inside fieldRadii's outerRadius. It used to say "because
+    // OrbitControls caps maxDistance", and that was wrong: maxDistance is camera-to-target, and
+    // every way of moving here except zooming translates both together, so the pair could walk
+    // out past the fade with the cap never tripping. See cameraLeash.ts.
+    //
+    // The centre comes from terrainGrid rather than being recomputed here, so the fade and the
+    // leash cannot drift apart.
+    const { x, z } = terrainAnchorXz(terrain);
+    return new THREE.Vector3(x, 0, z);
   }, [terrain]);
 
   const layout = useMemo(

@@ -9,6 +9,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import type { Terrain } from "../assets";
+import { cameraLeashM, leashScale } from "./cameraLeash";
+import { terrainAnchorXz } from "./terrainGrid";
 import { fitDistance, type Viewpoint } from "./viewpoints";
 
 const PAN_ACCEL = 900; // m/s^2, so panning eases in rather than snapping to full speed
@@ -50,6 +53,8 @@ interface CameraRigProps {
   extent: number;
   /** the racing line's bounding box, for the orbit's own fit. See the note at the orbit. */
   fitCorners: readonly (readonly [number, number, number])[];
+  /** only for its anchor: the camera is leashed to the centre of the terrain field. */
+  terrain: Terrain;
   carPoseRef: React.MutableRefObject<{ position: THREE.Vector3; direction: THREE.Vector3 }>;
   onUserTakeover?: () => void;
 }
@@ -61,6 +66,7 @@ export function CameraRig({
   center,
   extent,
   fitCorners,
+  terrain,
   carPoseRef,
   onUserTakeover,
 }: CameraRigProps) {
@@ -85,14 +91,44 @@ export function CameraRig({
     [],
   );
 
+  // the terrain field's centre, and how far from it this camera may get. Both are defined outside
+  // this file so the fade and the leash cannot drift apart; cameraLeash.ts carries the argument
+  // for why OrbitControls' maxDistance was not enough on its own.
+  const anchor = useMemo(() => terrainAnchorXz(terrain), [terrain]);
+  const leash = cameraLeashM(extent);
+
+  /**
+   * pull `pos` back onto the leash circle, translating `target` by the same vector. Moving the
+   * pair together is deliberate: OrbitControls rebuilds its spherical state from
+   * (position - target) on every update(), so an equal translation is invisible to it, while
+   * correcting only the camera would be a fight it wins the next frame. Returns whether it bit.
+   */
+  const clampToLeash = (pos: THREE.Vector3, target: THREE.Vector3): boolean => {
+    const k = leashScale(pos.x - anchor.x, pos.z - anchor.z, leash);
+    if (k === 1) return false;
+    const cx = (pos.x - anchor.x) * (1 - k);
+    const cz = (pos.z - anchor.z) * (1 - k);
+    pos.x -= cx;
+    pos.z -= cz;
+    target.x -= cx;
+    target.z -= cz;
+    return true;
+  };
+
   const flyTo = (to: THREE.Vector3, toTarget: THREE.Vector3) => {
     const controls = controlsRef.current;
     if (!controls) return;
+    const toPos = to.clone();
+    const toEnd = toTarget.clone();
+    // clamping the destination is the whole flight: the leash region is a disc, the xz projection
+    // of a lerp is the lerp of the projections, and the departure point is inside already (every
+    // other branch keeps it there). So the tween branch below needs no clamp of its own.
+    clampToLeash(toPos, toEnd);
     tween.current = {
       fromPos: camera.position.clone(),
-      toPos: to.clone(),
+      toPos,
       fromTarget: controls.target.clone(),
-      toTarget: toTarget.clone(),
+      toTarget: toEnd,
       t: 0,
       duration: reducedMotion ? 0.01 : TWEEN_S,
     };
@@ -159,13 +195,19 @@ export function CameraRig({
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -carPoseRef.current.position.y);
       const hit = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(plane, hit)) return;
+      // a ray aimed near the horizon meets the ground plane arbitrarily far out, so a grazing
+      // double-click reads as "fly to a point kilometres outside the world". flyTo would clamp
+      // the camera anyway; pulling the hit in first is what keeps the framing sane when it does.
+      const kHit = leashScale(hit.x - anchor.x, hit.z - anchor.z, leash);
+      hit.x = anchor.x + (hit.x - anchor.x) * kHit;
+      hit.z = anchor.z + (hit.z - anchor.z) * kHit;
       const offset = camera.position.clone().sub(controls.target);
       flyTo(hit.clone().add(offset), hit);
     };
     canvas.addEventListener("dblclick", onDblClick);
     return () => canvas.removeEventListener("dblclick", onDblClick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gl, camera, carPoseRef, reducedMotion]);
+  }, [gl, camera, carPoseRef, reducedMotion, anchor, leash]);
 
   useFrame((_, rawDelta) => {
     const controls = controlsRef.current;
@@ -268,6 +310,28 @@ export function CameraRig({
       camera.position.add(scratch.move);
     }
     controls.update();
+
+    // **the leash**, and the only place it is enforced continuously. Both ways of translating the
+    // camera and its target together land in this branch: the WASD block above, and
+    // OrbitControls' own right-drag pan, since this runs every frame whether a key is down or
+    // not. Neither changes the camera-to-target distance maxDistance guards. Without this the
+    // pair walks off the terrain field and the occluder's straight edge comes back. See
+    // cameraLeash.ts.
+    if (clampToLeash(camera.position, controls.target)) {
+      // bleed off the outward part of the pan velocity too. Left in, it keeps accumulating
+      // against a boundary it cannot cross, and releasing the key then buys a moment of nothing
+      // happening while the decay works through it: the wall feels mushy instead of solid.
+      const ox = camera.position.x - anchor.x;
+      const oz = camera.position.z - anchor.z;
+      const len = Math.hypot(ox, oz);
+      if (len > 0) {
+        const outward = (panVel.current.x * ox + panVel.current.z * oz) / len;
+        if (outward > 0) {
+          panVel.current.x -= (outward * ox) / len;
+          panVel.current.z -= (outward * oz) / len;
+        }
+      }
+    }
   });
 
   const dynamic = viewpoint.kind === "follow" || viewpoint.kind === "chase";
@@ -278,11 +342,12 @@ export function CameraRig({
       enabled={!dynamic && !orbiting}
       makeDefault
       minDistance={12}
-      // **TerrainMesh depends on this cap.** Its point-and-wire field fades on a radius anchored
-      // to the scene, not to the camera, and that is only safe because 2.5 extents (about 5.1 km
-      // at Spa) keeps the camera inside the fade's outer radius (about 5.2 km). Raise this and
-      // the heightfield's hard rectangular edge comes back into view. See fadeRadii() there.
-      maxDistance={extent * 2.5}
+      // the same radius as the leash, so zooming out cannot reach anywhere free-look is not
+      // allowed to stand either. This alone is *not* what protects the terrain fade: it only caps
+      // camera-to-target, and everything else here moves the two together. Keeping the two
+      // numbers equal keeps the envelope one shape rather than two. See fieldRadii() in
+      // terrainGrid.ts for the radius this has to stay inside.
+      maxDistance={leash}
       maxPolarAngle={Math.PI * 0.495}
       enableDamping={!reducedMotion}
       dampingFactor={0.075}

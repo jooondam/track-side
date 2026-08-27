@@ -1,56 +1,102 @@
 # track-side
 
-Ideal racing line optimizer for GT3 cars: minimum-curvature and minimum-time
-trajectory planning on real circuit geometry, with an interactive 3D track
-viewer as the delivery layer.
-
-Status: M1–M6 done: clean track geometry, a velocity profile solver, a minimum-curvature path
-solver, and an offline min-time NLP reference over a μ grid, all validated on real Monza. The
-racing line itself is grip-invariant by design (see `docs/DESIGN_NOTES.md` section 0.1); the
-interactive slider drives the velocity profile, not the path. M5 adds elevation and 3D meshes
-for Spa and Monza: real 2023 OpenF1 car-location data registered onto the vendored centerlines
-(`offline/elevation/`), z(s) profiles that reproduce Eau Rouge's ~40 m climb and each
-circuit's documented range, triangulated into glTF surfaces (`offline/mesh/`). M6 is the
-in-browser viewer.
-
-## The viewer
+An ideal-racing-line optimiser for GT3 cars, on real circuit geometry, with an interactive
+3D viewer as the delivery layer. Spa-Francorchamps and Monza.
 
 **Live: <https://jooondam.github.io/track-side/>**
 
-An interactive 3D viewer (React + react-three-fiber, `/src`): both circuits in 3D with the
-racing line coloured by phase (accel/brake/coast) or speed, a grip slider that re-solves the
-velocity profile *in the browser* on every drag (a TypeScript port of the M2 solver,
-cross-validated against the Python implementation to 0.1 m/s on both circuits, solving in
-low-single-digit milliseconds shown live in the HUD), an animated GT3 marker driving the line
-at the solved v(s), corner-name labels, a hover probe, an elevation strip, and a 1x/3x
-elevation exaggeration toggle.
+![The Spa overview: the racing line coloured by phase, over the terrain field](docs/overview.jpg)
 
-### Instruments
+## What it does
 
-The telemetry dock carries the readouts an engineer would actually work from:
+The racing line is solved as a **minimum-curvature QP** over lateral offsets in the track's
+Frenet frame: the path that a GT3 can carry the most speed through, given the real width of
+the road. Speed along it comes from a separate **velocity-profile solver**: a forward/backward
+pass over the friction ellipse with aerodynamic downforce, longitudinal load transfer, road
+gradient, and tyre load sensitivity.
 
-- **v(s)** phase-coloured, with corner ticks that fly the camera when clicked
-- **delta to ghost** cumulative time against a fixed reference grip, plotted against arc length
-  rather than time, so the curve says *where* the lap is being lost and not only how much
-- **g-g** longitudinal against lateral acceleration for the whole lap, over the tyre's own
-  `mu * g` circle: how much of the available grip the line actually uses
-- **corner report** per corner minimum, entry and exit speed, time in the corner, and delta
+Splitting those two is the design decision the rest follows from. The min-curvature path does
+not depend on the friction coefficient, so grip changes the *speed* around a lap, not the
+*line*. That is what makes the grip slider in the viewer cheap enough to be interactive: only
+the velocity profile has to be re-solved, and it re-solves on every drag event, in the browser,
+in about 10 ms.
 
-### Running it
+Elevation is real, not decorative. z(s) for each circuit is registered from 2023 OpenF1 car-location
+data onto the vendored centrelines, and reproduces Eau Rouge's ~40 m climb and each circuit's
+documented range.
+
+![Chase camera on the approach to Eau Rouge](docs/chase.jpg)
+
+## How it fits together
+
+```
+offline/ (Python)  ->  artifacts/ + public/ (committed JSON, glTF)  ->  src/ (TypeScript viewer)
+```
+
+The heavy solving is offline and its output is committed, so the deployed site is static and the
+browser never waits on a server:
+
+| stage | what it produces |
+| --- | --- |
+| `offline/ingest`, `offline/geometry` | cleaned centrelines, widths, curvature, arc length |
+| `offline/mincurv` | the minimum-curvature racing line (and a shortest-path baseline to compare against) |
+| `offline/velocity` | the reference velocity profile and lap time |
+| `offline/elevation`, `offline/mesh` | z(s) from OpenF1 traces, triangulated into glTF track surfaces |
+| `offline/mintime` | an offline minimum-time NLP over a μ grid, as a reference solve to check the decomposition against |
+| `offline/landmarks` | corner names measured against the line, braking boards, trackside furniture |
+
+`src/solver/velocity.ts` is a TypeScript port of the Python velocity solver, and it is held to
+the original rather than trusted: `src/solver/velocity.test.ts` replays committed fixtures from
+the Python implementation on both circuits and asserts lap time to 1e-6 s, v(s) to 5e-6 m/s, and
+axle loads to 0.5 N, which is the fixtures' own rounding floor, so anything that fires there is
+a port divergence and nothing else.
+
+`src/render/` is the viewer: react-three-fiber, one camera director that owns every camera move,
+a heightfield terrain that recedes into a point-and-wire field with no visible boundary, and a
+sky dome and fog that share one horizon colour so the terrain's far edge cannot be found.
+
+`src/ui/` is the instrument panel, drawn as an engineer's run sheet rather than as a dashboard:
+speed, delta and elevation traces against arc length, a g-g square, a per-corner table, and the
+**braking report**, which is the one output here that transfers to actually driving the circuit.
+It gives each corner's braking point against the distance boards on the way in, the axle that
+reaches its friction circle first, and how far that point moves when the grip changes. That last
+column is the strongest number in the project: the boards are placed rather than surveyed, but
+both solves read the same boards, so the difference between two grip levels is exact whatever
+the boards' own error. At mu 1.40 the car brakes 30 m later into Monza's first chicane than at
+mu 1.20.
+
+Corner positions are measured from the line that ships, not read off a circuit map, and
+`offline/landmarks/checks.py` holds them within 25 m of a curvature maximum in that line. They
+were not always: see `PLAN.md`.
+
+## Running it
 
 ```
 npm install
-npm run dev     # dev server on http://localhost:5173/
-npm test        # TS solver cross-validation, plus the render-side geometry guards
-npm run shots   # headless screenshots into ./shots for reviewing a visual change
+npm run dev            # dev server
+npm test               # 256 tests: the solver port, the render maths, the reports
+npm run build          # tsc --noEmit && vite build
+
+pip install -e ".[dev]"
+pytest                 # 208 tests: the offline pipeline and its gates
 ```
 
-The viewer's state lives in the query string, so any view is a link:
-`?circuit=spa&view=corner:Eau%20Rouge&mu=1.0&ghost=1&enter=1`. `npm run shots` drives the app
-through exactly those URLs, which is how a visual change can be reviewed without deploying.
+CI builds, tests and deploys to GitHub Pages on every push to `main`
+(`.github/workflows/deploy.yml`).
 
 Assets under `/public` are generated by `offline/build_viewer_assets.py` from the committed
 artifacts; regenerate after changing the offline pipeline.
+
+## Layout
+
+```
+/offline/       Python: ingest, geometry, the solvers, the NLP reference
+/artifacts/     generated and committed: track JSON, glTF, mu-family solves, validation plots
+/public/        the viewer's own assets, built from /artifacts
+/src/           the TypeScript viewer and the ported in-browser solver
+/third_party/   vendored upstream data, unmodified, read-only
+/docs/          screenshots
+```
 
 ## Data rights and attribution
 
@@ -63,18 +109,6 @@ Licensing B.V.; this project is not endorsed by or associated with them.
 Reference raceline comparison: TUMFTM/global_racetrajectory_optimization (LGPL-3.0),
 Heilmeier et al., "Minimum curvature trajectory planning and control for an autonomous race
 car", Vehicle System Dynamics 58(10), 2020.
-Display face: Archivo, © 2020 The Archivo Project Authors (Omnibus-Type), SIL Open Font
-License 1.1. Self-hosted, weight axis only; licence text in third_party/Archivo-OFL-1.1.txt.
 ```
 
 See `third_party/README.md` for the vendoring boundary this repo enforces.
-
-## Layout
-
-```
-/offline/            Python, ingest, geometry, NLP reference solves
-/artifacts/          generated, committed, track JSON, glTF, mu-family
-/src/                TypeScript frontend (later milestone)
-/third_party/         vendored upstream data, unmodified, read-only
-/docs/               design notes, validation results, assumptions
-```

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { cameraLeashM } from "./cameraLeash";
 import {
   FIELD_SPACING_M,
   SKIRT_REACH_M,
@@ -11,6 +12,7 @@ import {
   plateVertexHeight,
   skirtReach,
   solveSkirtRatio,
+  terrainAnchorXz,
 } from "./terrainGrid";
 
 // the two shipped circuits, from public/<id>/terrain.json meta
@@ -94,11 +96,23 @@ describe("fieldRadii", () => {
     });
 
     it(`${c.id}: the camera cannot outrun the field`, () => {
-      // Coupled across files: CameraRig caps OrbitControls.maxDistance at extent * 2.5 while the
-      // fade is anchored to the scene, so a camera further out than fadeEnd sits in a hole with
-      // no field under it. Raising maxDistance in CameraRig.tsx, a file that mentions no terrain,
-      // is what this guards.
-      expect(r.fadeEnd).toBeGreaterThan(LINE_EXTENT_M[c.id] * 2.5 + 250);
+      // Coupled across files: CameraRig leashes the camera to cameraLeashM(extent) from the
+      // terrain anchor while the fade is anchored to that same point, so a camera further out
+      // than fadeEnd sits in a hole with no field under it. Raising the leash in cameraLeash.ts,
+      // a file that mentions no terrain, is what this guards.
+      //
+      // This used to read maxDistance, and that was the wrong number to guard: maxDistance caps
+      // camera-to-target, and every way of moving here except zooming translates the pair
+      // together, so the camera could walk past the fade with the cap never tripping.
+      expect(r.fadeEnd).toBeGreaterThan(cameraLeashM(LINE_EXTENT_M[c.id]) + 250);
+    });
+
+    it(`${c.id}: the anchor is the centre of the heightfield`, () => {
+      // TerrainMesh measures the fade from here and CameraRig measures the leash from here; the
+      // two radii only compose because it is the same point.
+      const { x, z } = terrainAnchorXz(c);
+      expect(x).toBeCloseTo(c.x0 + ((c.nCells - 1) * c.dx) / 2, 9);
+      expect(z).toBeCloseTo(c.z0 + ((c.nCells - 1) * c.dz) / 2, 9);
     });
 
     it(`${c.id}: the lattice covers the circuit`, () => {
