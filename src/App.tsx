@@ -30,7 +30,7 @@ import { RAIL_COLLAPSED_W, RAIL_EXPANDED_W, SidePanel, VIEWPOINT_PILL_BAND, View
 import { DOCK_STRIP_H, TelemetryDock, dockBodyHeight } from "./ui/TelemetryDock";
 import { TOPBAR_H, TopBar } from "./ui/TopBar";
 import { ThemeProvider, useIsNarrow, usePrefersReducedMotion, useTheme, useViewportSize } from "./ui/theme";
-import { readUrlState, writeUrlState } from "./ui/urlState";
+import { readUrlState, seekArcLength, writeUrlState } from "./ui/urlState";
 import { useExpandable } from "./ui/useExpandable";
 
 const GHOST_MU = 1.2;
@@ -119,7 +119,11 @@ function Viewer() {
         if (cancelled) return;
         setAssets(loaded);
         const p = progressRef.current;
-        p.scrub = { s: 0 };
+        // `?at=corner:<name>` seeks the lap clock there instead of to the start line, reusing the
+        // scrubber's own path: Scene turns a pending `scrub` into a clock time on the next frame,
+        // whether or not playback is running. Resolved against `line.sM` like the corner report
+        // does in cornerRows.ts, so both agree on where a corner is.
+        p.scrub = { s: seekArcLength(initial.at, loaded.landmarks.corners) };
       })
       .catch((err: Error) => {
         if (!cancelled) setLoadError(err);

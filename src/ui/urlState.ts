@@ -11,6 +11,7 @@
 // History is replaced rather than pushed: dragging the grip slider writes here on every frame's
 // worth of change, and pushing would bury the back button under a hundred entries.
 
+import type { Corner } from "../assets";
 import type { ThemeName } from "./theme";
 
 export interface UrlState {
@@ -33,10 +34,24 @@ export interface UrlState {
   motion: boolean | null;
   /** lap playback. Off makes a capture deterministic, which is what lets two frames be compared. */
   playing: boolean;
+  /**
+   * where in the lap to start, as `corner:<name>`. A seek, not a state: it seeds the lap clock
+   * once on load and is never written back, the way `?t=` on a video link addresses a moment
+   * without becoming part of the player's state.
+   *
+   * Both cars run off one clock, so this places the ghost too -- at wherever *it* has got to by
+   * the time the car reaches that corner, which is the grip difference drawn as a gap rather than
+   * quoted as a number. Without it every frozen frame is the start line, since that is where the
+   * clock begins.
+   */
+  at: string | null;
 }
 
 /** parse whatever is in the address bar, tolerating anything malformed by falling back. */
-type Defaults = Omit<UrlState, "theme" | "enter" | "furniture" | "ghost" | "motion" | "playing">;
+type Defaults = Omit<
+  UrlState,
+  "theme" | "enter" | "furniture" | "ghost" | "motion" | "playing" | "at"
+>;
 
 export function readUrlState(defaults: Defaults): UrlState {
   const q = new URLSearchParams(window.location.search);
@@ -54,11 +69,12 @@ export function readUrlState(defaults: Defaults): UrlState {
     ghost: q.get("ghost") === "1",
     motion: q.get("motion") === "1" ? true : q.get("motion") === "0" ? false : null,
     playing: q.get("play") !== "0",
+    at: q.get("at"),
   };
 }
 
 /** write the current state back, omitting anything still at its default so links stay short. */
-export function writeUrlState(state: UrlState, defaults: Defaults): void {
+export function writeUrlState(state: Omit<UrlState, "at">, defaults: Defaults): void {
   const q = new URLSearchParams();
   if (state.circuit !== defaults.circuit) q.set("circuit", state.circuit);
   if (state.view !== defaults.view) q.set("view", state.view);
@@ -70,10 +86,29 @@ export function writeUrlState(state: UrlState, defaults: Defaults): void {
   if (state.ghost) q.set("ghost", "1");
   if (state.motion !== null) q.set("motion", state.motion ? "1" : "0");
   if (!state.playing) q.set("play", "0");
+  // `at` is deliberately absent: it is consumed once on load, and echoing it back would leave a
+  // link claiming a moment the car has since driven away from.
 
   const query = q.toString();
   const next = `${window.location.pathname}${query ? `?${query}` : ""}`;
   if (next !== `${window.location.pathname}${window.location.search}`) {
     window.history.replaceState(null, "", next);
   }
+}
+
+/**
+ * Arc length for an `?at=` seek, or 0 for the start line.
+ *
+ * Matched case-insensitively, because the name comes out of a URL a person typed or edited, and
+ * `corner:eau rouge` meaning something different from `corner:Eau Rouge` would be a trap. An
+ * unrecognised corner falls back to the start line rather than throwing: a mistyped link should
+ * open the circuit, not an error card.
+ *
+ * Resolved against the corner's own `sM`, which is what cornerRows.ts reads it as, so a seek and
+ * the corner report agree on where a corner is.
+ */
+export function seekArcLength(at: string | null, corners: readonly Corner[]): number {
+  if (!at?.toLowerCase().startsWith("corner:")) return 0;
+  const name = at.slice("corner:".length).trim().toLowerCase();
+  return corners.find((c) => c.name.toLowerCase() === name)?.sM ?? 0;
 }

@@ -69,9 +69,37 @@ const DOC_QUALITY = 82;
 //
 // With both, two runs in separate browsers produce byte-identical files -- measured, not assumed --
 // so a diff here means the viewer changed.
+//
+// `furniture=0` is the third, and it is a choice about the pictures rather than about determinism:
+// the poles, gantries and boards stand between the camera and the road in every frame that has
+// them, and the README is selling the line and the terrain. The braking boards are the one real
+// loss, and the braking report is where those are actually read anyway.
+//
+// The rail and the dock are the instrument panel, and a screenshot with them shut is a picture of
+// a 3D scene rather than of this tool, so one frame pins them open. Only one, and not the one that
+// would show them best: **with both pinned, a `corner:` viewpoint draws no road at all**, and the
+// fitted overview clips the top of the circuit. Both reproduce at deviceScaleFactor 1, so this is
+// the product and not the capture. verify-p0.mjs pins both panels for the desktop, plan and chase
+// frames but never for a corner, which is why it has never been photographed. Until that is fixed
+// the chase frame carries the panels, because it is the one that survives them.
+const DOC_FIXED = "enter=1&furniture=0&play=0&motion=0";
+const DOC_PINS = { dock: true, side: true };
 const SHOTS = [
-  ["doc-overview", "circuit=spa&view=overview&enter=1&play=0&motion=0", { doc: "docs/overview.jpg" }],
-  ["doc-chase", "circuit=spa&view=chase&enter=1&play=0&motion=0", { doc: "docs/chase.jpg" }],
+  ["doc-overview", `circuit=spa&view=overview&${DOC_FIXED}`, { doc: "docs/overview.jpg" }],
+  // the grip cost drawn rather than quoted. mu 1.15 against the ghost's reference 1.20 puts them
+  // 20 m apart at Eau Rouge -- close enough that one frame holds both cars, far enough to read as
+  // a gap. At 0.95 it is 105 m and the ghost is off the side of the picture.
+  [
+    "doc-eau-rouge",
+    `circuit=spa&view=corner:Eau%20Rouge&mu=1.15&ghost=1&at=corner:Eau%20Rouge&${DOC_FIXED}`,
+    { doc: "docs/eau-rouge.jpg" },
+  ],
+  // the second rendition, and the only one of the three that carries the panels: see DOC_PINS.
+  [
+    "doc-lamp",
+    `circuit=spa&view=chase&theme=dark&at=corner:Eau%20Rouge&${DOC_FIXED}`,
+    { doc: "docs/lamp.jpg", ...DOC_PINS },
+  ],
   ["spa-overview", "circuit=spa&view=overview&enter=1"],
   ["spa-eau-rouge", "circuit=spa&view=corner:Eau%20Rouge&enter=1"],
   ["spa-eau-rouge-bare", "circuit=spa&view=corner:Eau%20Rouge&enter=1&furniture=0"],
@@ -89,6 +117,10 @@ const SHOTS = [
   ["spa-telemetry", "circuit=spa&view=chase&enter=1", { dock: true, side: true }],
   ["spa-delta", "circuit=spa&view=chase&enter=1&mu=0.95&ghost=1", { dock: true }],
   ["spa-corners", "circuit=spa&view=overview&enter=1&mu=0.95&ghost=1", { dock: true, tab: "corners" }],
+  // a corner viewpoint with both panels pinned, which is the combination nothing photographed. It
+  // currently draws no road: the corner's name sits over blank paper. Kept as the frame that shows
+  // the fix when it lands, and shows the bug until then.
+  ["spa-corner-both-pinned", "circuit=spa&view=corner:Eau%20Rouge&enter=1", { dock: true, side: true }],
   // the ghost, several laps in. This is the frame that used to show the two cars on opposite
   // sides of the circuit: they ran on independent clocks wrapping at their own lap times, so the
   // quicker ghost gained a whole lap periodically and the gap grew without bound. One shared
