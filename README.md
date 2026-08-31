@@ -99,7 +99,7 @@ exact, because both solves read the same boards. Section 10 of that document is 
 ```
 npm install
 npm run dev            # dev server
-npm test               # 256 tests: the solver port, the render maths, the reports
+npm test               # 259 tests: the solver port, the render maths, the reports
 npm run build          # tsc --noEmit && vite build
 
 pip install -e ".[dev,reference]"
