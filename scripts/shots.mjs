@@ -85,7 +85,9 @@ const DOC_QUALITY = 82;
 const DOC_FIXED = "enter=1&furniture=0&play=0&motion=0";
 const DOC_PINS = { dock: true, side: true };
 const SHOTS = [
-  ["doc-overview", `circuit=spa&view=overview&${DOC_FIXED}`, { doc: "docs/overview.jpg" }],
+  // near-vertical rather than the raised three-quarter: the whole lap reads as a shape, every
+  // corner is named on the line, and there is no empty sky to fill a hero frame with.
+  ["doc-overview", `circuit=spa&view=top&${DOC_FIXED}`, { doc: "docs/overview.jpg" }],
   // the grip cost drawn rather than quoted. mu 1.15 against the ghost's reference 1.20 puts them
   // 20 m apart at Eau Rouge -- close enough that one frame holds both cars, far enough to read as
   // a gap. At 0.95 it is 105 m and the ghost is off the side of the picture.
@@ -95,9 +97,11 @@ const SHOTS = [
     { doc: "docs/eau-rouge.jpg" },
   ],
   // the second rendition, and the only one of the three that carries the panels: see DOC_PINS.
+  // Seeked to La Source rather than Eau Rouge's straight approach, so the car is turned in and
+  // braking -- red phase trace under it -- instead of sitting on flat, empty tarmac.
   [
     "doc-lamp",
-    `circuit=spa&view=chase&theme=dark&at=corner:Eau%20Rouge&${DOC_FIXED}`,
+    `circuit=spa&view=chase&theme=dark&at=corner:La%20Source&${DOC_FIXED}`,
     { doc: "docs/lamp.jpg", ...DOC_PINS },
   ],
   ["spa-overview", "circuit=spa&view=overview&enter=1"],

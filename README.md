@@ -5,7 +5,7 @@ An ideal-racing-line optimiser for GT3 cars, on real circuit geometry, with an i
 
 **Live: <https://jooondam.github.io/track-side/>**
 
-![The Spa overview: the racing line coloured by phase, over the terrain field](docs/overview.jpg)
+![The full Spa lap from directly overhead, the racing line coloured by phase and every corner named](docs/overview.jpg)
 
 ## What it does
 
